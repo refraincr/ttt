@@ -1,0 +1,23 @@
+{
+  "name": "governance-web",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "typecheck": "vue-tsc --noEmit",
+    "build": "npm run typecheck && vite build",
+    "test": "playwright test"
+  },
+  "dependencies": {
+    "vue": "3.5.22",
+    "element-plus": "2.11.5"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.61.1",
+    "@vitejs/plugin-vue": "5.2.4",
+    "typescript": "5.9.3",
+    "vite": "6.4.1",
+    "vue-tsc": "3.1.1"
+  }
+}

@@ -1,0 +1,51 @@
+:root { font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif; color: #22344a; background: #f3f6fa; --el-color-primary: #246c64; }
+* { box-sizing: border-box; }
+body { margin: 0; }
+button, input { font: inherit; }
+h1, h2, h3, p { margin-top: 0; }
+.muted { color: #82909f; font-size: 13px; }
+.eyebrow { color: #388578; font-size: 12px; letter-spacing: 2px; margin-bottom: 12px; }
+.brand { display: flex; align-items: center; gap: 12px; font-size: 17px; font-weight: 600; }
+.brand-mark { display: grid; place-items: center; width: 39px; height: 43px; border-radius: 10px; background: #c7e3d8; color: #1b514b; font-size: 24px; }
+.login-layout { min-height: 100vh; display: grid; grid-template-columns: 1fr 1fr; }
+.login-intro { padding: 55px 12%; background: #173e3a; color: #f2f7f3; display: flex; flex-direction: column; justify-content: space-between; min-height: 100vh; }
+.login-intro .eyebrow { color: #a8c9ba; }
+.login-intro h1 { font-size: clamp(30px, 3.1vw, 48px); font-weight: 500; line-height: 1.6; letter-spacing: 1px; }
+.intro-copy { color: #b0c6bf; line-height: 2; }
+.intro-foot { font-size: 12px; color: #8cafa3; }
+.login-panel { display: grid; place-items: center; padding: 40px; background: #fff; }
+.login-form { width: 100%; max-width: 355px; }
+.login-form h2 { font-size: 30px; margin-bottom: 12px; }
+.login-form form { margin-top: 35px; }
+.login-button { width: 100%; margin-top: 8px; }
+.login-note { font-size: 12px; color: #96a1ac; line-height: 1.9; margin-top: 28px; }
+.el-alert { margin-bottom: 20px; }
+.workspace { display: flex; min-height: 100vh; }
+.sidebar { width: 220px; flex-shrink: 0; background: #193e3a; color: #e2eee9; padding: 30px 20px; position: relative; }
+.brand small { color: #90afa4; font-size: 11px; font-weight: 400; }
+.nav-label { color: #91aca4; font-size: 11px; margin: 55px 14px 14px; }
+.nav-active { background: #2c5950; border-radius: 7px; padding: 14px 17px; font-size: 14px; }
+.sidebar-foot { position: absolute; bottom: 26px; color: #90aaa2; font-size: 11px; line-height: 1.9; }
+.main-area { flex: 1; min-width: 0; }
+header { height: 78px; padding: 0 34px; display: flex; align-items: center; justify-content: space-between; background: #fff; border-bottom: 1px solid #e5ebf0; font-size: 13px; }
+.separator { color: #b8c2ca; margin: 0 13px; }
+.user-info { display: flex; align-items: center; gap: 22px; }
+.user-info small { display: block; font-size: 11px; color: #8b98a4; margin-top: 4px; }
+.content { padding: 34px; max-width: 1600px; margin: auto; }
+.page-heading { display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px; }
+.page-heading h1 { font-size: 27px; font-weight: 600; margin-bottom: 12px; }
+.event-card { background: #fff; border: 1px solid #e2e8ef; border-radius: 9px; overflow: hidden; }
+.card-heading { padding: 23px 24px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #edf0f4; }
+.card-heading h2 { margin: 0; font-size: 16px; font-weight: 600; }
+.card-heading h2 span { margin-left: 8px; font-size: 12px; color: #467e70; background: #edf5f1; padding: 3px 9px; border-radius: 12px; }
+.filter-bar { display: flex; padding: 20px 24px; gap: 10px; }
+.filter-bar .el-input { max-width: 330px; }
+.filter-bar .el-button + .el-button { margin-left: 0; }
+.el-table { --el-table-header-bg-color: #f6f8fa; --el-table-header-text-color: #657585; font-size: 13px; }
+.el-table .cell { padding: 9px 16px; }
+.table-footer { padding: 20px 24px; display: flex; gap: 20px; justify-content: space-between; align-items: center; }
+.data-note { color: #94a1ac; font-size: 12px; margin-top: 20px; }
+.description { white-space: pre-wrap; line-height: 1.9; color: #526274; overflow-wrap: anywhere; }
+.initializing { padding: 100px; text-align: center; color: #657585; }
+@media(max-width: 850px) { .sidebar { width: 170px; padding: 24px 12px; } .content { padding: 22px 16px; } header { padding: 0 16px; } .table-footer { flex-direction: column; align-items: flex-start; } }
+@media(max-width: 600px) { .login-layout { grid-template-columns: 1fr; } .login-intro { min-height: auto; padding: 25px; } .login-intro > div:nth-child(2), .intro-foot { display: none; } .login-panel { padding: 45px 25px; } .sidebar { display: none; } .page-heading { align-items: flex-start; } header > span { display: none; } .user-info { width: 100%; justify-content: space-between; } }

@@ -1,0 +1,21 @@
+server:
+  port: ${PORT:8080}
+  servlet:
+    session:
+      timeout: 30m
+      cookie:
+        http-only: true
+        same-site: lax
+        secure: ${COOKIE_SECURE:false}
+spring:
+  datasource:
+    url: ${DB_URL:jdbc:mysql://localhost:3306/governance?connectionTimeZone=%2B08:00&forceConnectionTimeZoneToSession=true}
+    username: ${DB_USER:governance}
+    password: ${DB_PASSWORD}
+  jackson:
+    time-zone: Asia/Shanghai
+  sql:
+    init:
+      mode: never
+app:
+  demo-password: ${DEMO_PASSWORD:}

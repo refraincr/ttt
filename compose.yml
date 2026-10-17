@@ -1,0 +1,38 @@
+name: governance
+services:
+  db:
+    image: mysql:8.0.46
+    environment:
+      MYSQL_DATABASE: governance
+      MYSQL_USER: governance
+      MYSQL_PASSWORD: ${DB_PASSWORD:?请设置 DB_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:?请设置 DB_ROOT_PASSWORD}
+      TZ: Asia/Shanghai
+    ports:
+      - "127.0.0.1:${MYSQL_PORT:-3306}:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "MYSQL_PWD=$$MYSQL_PASSWORD mysql -h 127.0.0.1 -u governance governance -e 'SELECT 1'"]
+      interval: 5s
+      timeout: 5s
+      retries: 40
+  api:
+    build: ./backend
+    environment:
+      DB_URL: jdbc:mysql://db:3306/governance?connectionTimeZone=%2B08:00&forceConnectionTimeZoneToSession=true
+      DB_USER: governance
+      DB_PASSWORD: ${DB_PASSWORD:?请设置 DB_PASSWORD}
+      DEMO_PASSWORD: ${DEMO_PASSWORD:?请设置 DEMO_PASSWORD，至少12位}
+      TZ: Asia/Shanghai
+    depends_on:
+      db:
+        condition: service_healthy
+  web:
+    build: ./frontend
+    ports:
+      - "127.0.0.1:${WEB_PORT:-8088}:80"
+    depends_on:
+      - api
+volumes:
+  mysql-data:
