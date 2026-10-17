@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { api, ApiError, type Account, type EventPage, type EventSummary } from './api'
+import AccountManagement from './AccountManagement.vue'
+import CatalogManagement from './CatalogManagement.vue'
 
 const account = ref<Account | null>(null)
 const initializing = ref(true)
@@ -16,6 +18,8 @@ const query = ref('')
 const appliedQuery = ref('')
 const detail = ref<EventSummary | null>(null)
 const detailOpen = ref(false)
+const section = ref('events')
+const isAdministrator = computed(() => account.value?.roles.includes('CENTER_ADMIN'))
 let sessionVersion = 0
 let detailRequest = 0
 const scope = computed(() => account.value?.roles.includes('CENTER_ANALYST') ? '全部门事件' : '本部门事件')
@@ -30,6 +34,7 @@ function clearSession() {
   sessionVersion++
   detailRequest++
   account.value = null
+  section.value = 'events'
   events.value = []
   total.value = 0
   detail.value = null
@@ -94,6 +99,14 @@ async function openDetail(id: number) {
 
 function search() { appliedQuery.value = query.value.trim(); page.value = 1; void loadEvents() }
 
+async function refreshAccount() {
+  const version = sessionVersion
+  try {
+    const result = await api<Account>('/auth/me')
+    if (version === sessionVersion) account.value = result
+  } catch (cause) { if (version === sessionVersion) handleError(cause) }
+}
+
 onMounted(async () => {
   try { account.value = await api<Account>('/auth/me'); if (canReadEvents.value) await loadEvents() }
   catch (cause) { if (!(cause instanceof ApiError && cause.status === 401)) handleError(cause) }
@@ -122,10 +135,12 @@ onMounted(async () => {
     </section>
   </main>
   <div v-else class="workspace">
-    <aside class="sidebar"><div class="brand"><span class="brand-mark">治</span><span>社会治理<br><small>分析预警工作台</small></span></div><p class="nav-label">业务工作</p><div class="nav-active">▤ &nbsp; 事件列表</div><div class="sidebar-foot">教学演示系统<br>数据仅用于功能验证</div></aside>
+    <aside class="sidebar"><div class="brand"><span class="brand-mark">治</span><span>社会治理<br><small>分析预警工作台</small></span></div><p class="nav-label">业务工作</p><button class="nav-item" :class="{ 'nav-active': section === 'events' }" @click="section = 'events'">▤ &nbsp; 事件列表</button><button v-if="isAdministrator" class="nav-item" :class="{ 'nav-active': section === 'accounts' }" @click="section = 'accounts'">部门与账号</button><button class="nav-item" :class="{ 'nav-active': section === 'catalog' }" @click="section = 'catalog'">来源与分类</button><div class="sidebar-foot">教学演示系统<br>数据仅用于功能验证</div></aside>
     <section class="main-area">
-      <header><span>业务工作 <span class="separator">/</span> 事件列表</span><div class="user-info"><span>{{ account.displayName }} <small>{{ account.departmentName }}</small></span><el-button :loading="busy" @click="signOut">退出登录</el-button></div></header>
-      <main class="content"><div class="page-heading"><div><p class="eyebrow">事件管理</p><h1>事件列表</h1><p class="muted">查看来源记录与事件详情，掌握权限内的上报信息。</p></div><el-tag v-if="canReadEvents" effect="plain" size="large">{{ scope }}</el-tag></div>
+      <header><span>工作台 <span class="separator">/</span> {{ section === 'accounts' ? '部门与账号' : section === 'catalog' ? '来源与分类' : '事件列表' }}</span><div class="user-info"><span>{{ account.displayName }} <small>{{ account.departmentName }}</small></span><el-button :loading="busy" @click="signOut">退出登录</el-button></div></header>
+      <AccountManagement v-if="section === 'accounts' && isAdministrator" :key="account.id" @expired="clearSession" @changed="refreshAccount" />
+      <CatalogManagement v-else-if="section === 'catalog'" :key="account.id" :administrator="!!isAdministrator" @expired="clearSession" />
+      <main v-else class="content"><div class="page-heading"><div><p class="eyebrow">事件管理</p><h1>事件列表</h1><p class="muted">查看来源记录与事件详情，掌握权限内的上报信息。</p></div><el-tag v-if="canReadEvents" effect="plain" size="large">{{ scope }}</el-tag></div>
         <el-alert v-if="error" :title="error" type="error" :closable="false" show-icon />
         <el-alert v-if="!canReadEvents" title="当前账号未分配事件查看权限" description="来源事件仅向中心研判或部门上报角色开放。" type="info" :closable="false" show-icon />
         <section v-if="canReadEvents" class="event-card"><div class="card-heading"><h2>来源上报记录 <span>{{ total }}</span></h2><span class="muted">{{ account.departmentName }}</span></div>

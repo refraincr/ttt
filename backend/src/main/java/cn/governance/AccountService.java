@@ -25,29 +25,47 @@ public class AccountService implements UserDetailsService {
         }
     }
 
+    public static class SessionUser extends User {
+        private final long accountId;
+        private final long sessionVersion;
+        public SessionUser(long id, long version, UserDetails details) {
+            super(details.getUsername(), details.getPassword(), details.isEnabled(), true, true, true, details.getAuthorities());
+            this.accountId = id;
+            this.sessionVersion = version;
+        }
+    }
+
     public Account current(Authentication authentication) {
         return jdbc.query("""
                 SELECT u.id, u.username, u.display_name, u.department_id, d.name
                 FROM tb_user u JOIN tb_department d ON d.id = u.department_id
-                WHERE u.username = ? AND u.enabled = 1 AND d.enabled = 1
+                WHERE u.id = ? AND u.session_version = ? AND u.enabled = 1 AND d.enabled = 1
                 """, (rs, row) -> new Account(rs.getLong(1), rs.getString(2), rs.getString(3),
-                        rs.getLong(4), rs.getString(5), roles(rs.getLong(1))), authentication.getName())
+                        rs.getLong(4), rs.getString(5), roles(rs.getLong(1))),
+                        ((SessionUser) authentication.getPrincipal()).accountId,
+                        ((SessionUser) authentication.getPrincipal()).sessionVersion)
                 .stream().findFirst().orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "账号不可用"));
     }
 
     private List<String> roles(long id) {
-        return jdbc.queryForList("SELECT role_code FROM tb_user_role WHERE user_id = ?", String.class, id);
+        return jdbc.queryForList("SELECT role_code FROM tb_user_role WHERE user_id = ? ORDER BY FIELD(role_code, 'CENTER_ADMIN', 'CENTER_ANALYST', 'DEPARTMENT_REPORTER', 'DEPARTMENT_HANDLER', 'SPECIAL_REPORTER')", String.class, id);
+    }
+
+    public Account administrator(Authentication authentication) {
+        Account account = current(authentication);
+        if (!account.roles().contains("CENTER_ADMIN")) throw new ResponseStatusException(HttpStatus.FORBIDDEN, "需要中心管理权限");
+        return account;
     }
 
     @Override
     public UserDetails loadUserByUsername(String username) {
         return jdbc.query("""
-                SELECT u.id, u.username, u.password_hash, u.enabled, d.enabled AS department_enabled
+                SELECT u.id, u.username, u.password_hash, u.enabled, u.session_version, d.enabled AS department_enabled
                 FROM tb_user u JOIN tb_department d ON d.id = u.department_id WHERE u.username = ?
-                """, (rs, row) -> User.withUsername(rs.getString("username"))
+                """, (rs, row) -> new SessionUser(rs.getLong("id"), rs.getLong("session_version"), User.withUsername(rs.getString("username"))
                         .password(rs.getString("password_hash"))
                         .disabled(!rs.getBoolean("enabled") || !rs.getBoolean("department_enabled"))
-                        .authorities(roles(rs.getLong("id")).toArray(String[]::new)).build(), username)
+                        .authorities(roles(rs.getLong("id")).toArray(String[]::new)).build()), username)
                 .stream().findFirst().orElseThrow(() -> new UsernameNotFoundException("账号或密码错误"));
     }
 }

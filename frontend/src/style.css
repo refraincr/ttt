@@ -25,6 +25,12 @@ h1, h2, h3, p { margin-top: 0; }
 .brand small { color: #90afa4; font-size: 11px; font-weight: 400; }
 .nav-label { color: #91aca4; font-size: 11px; margin: 55px 14px 14px; }
 .nav-active { background: #2c5950; border-radius: 7px; padding: 14px 17px; font-size: 14px; }
+.nav-item { display: block; width: 100%; border: 0; color: inherit; background: transparent; text-align: left; padding: 14px 17px; border-radius: 7px; cursor: pointer; margin-bottom: 5px; }
+.nav-item.nav-active { background: #2c5950; }
+.management-card { background: #fff; border: 1px solid #e2e8ef; border-radius: 9px; padding: 22px; }
+.management-toolbar { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin: 8px 0 20px; }
+.role-tag { margin: 3px; }
+@media(max-width: 600px) { .workspace .sidebar { display: block; width: 135px; padding: 18px 7px; } .sidebar .brand { font-size: 13px; gap: 5px; } .sidebar .brand-mark { width: 28px; font-size: 20px; } .sidebar-foot { display: none; } .management-toolbar { flex-wrap: wrap; } }
 .sidebar-foot { position: absolute; bottom: 26px; color: #90aaa2; font-size: 11px; line-height: 1.9; }
 .main-area { flex: 1; min-width: 0; }
 header { height: 78px; padding: 0 34px; display: flex; align-items: center; justify-content: space-between; background: #fff; border-bottom: 1px solid #e5ebf0; font-size: 13px; }
