@@ -18,6 +18,7 @@ public class AccountManagement {
                            boolean enabled, List<Role> roles, long version) {}
     public record UserWrite(String username, String displayName, Long departmentId, Boolean enabled,
                             List<Role> roles, String password, Long version) {}
+    private record UserAudit(UserView account, boolean passwordReset) {}
 
     private final JdbcTemplate jdbc;
     private final AccountService accounts;
@@ -126,7 +127,8 @@ public class AccountManagement {
         for (Role role : roles) jdbc.update("INSERT INTO tb_user_role (user_id, role_code) VALUES (?, ?)", id, role.name());
         retainAdministrator();
         UserView after = user(id);
-        audit.record(actor, "USER", id, before, after);
+        boolean passwordReset = before != null && input.password() != null && !input.password().isEmpty();
+        audit.record(actor, "USER", id, before == null ? null : new UserAudit(before, false), new UserAudit(after, passwordReset));
         return after;
     }
 }

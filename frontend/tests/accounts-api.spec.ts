@@ -39,6 +39,7 @@ test('账号改权、停用和密码重置立即使旧会话失效，旧版本�
   const client = await playwright.request.newContext({ baseURL })
   try {
     await signIn(client, user.username, 'Integration-Test-2026!')
+    expect(await (await client.get('/api/events')).json()).toMatchObject({ total: 2 })
     const original = user
     const changed = await write(request, 'PUT', `/api/admin/users/${user.id}`, { ...user, roles: ['DEPARTMENT_HANDLER'] })
     expect(changed.status()).toBe(200)
@@ -53,11 +54,24 @@ test('账号改权、停用和密码重置立即使旧会话失效，旧版本�
     expect((await client.get('/api/auth/me')).status()).toBe(401)
     const csrf = await (await client.get('/api/auth/csrf')).json()
     expect((await client.post('/api/auth/login', { form: { username: user.username, password: 'Integration-Test-2026!' }, headers: { [csrf.headerName]: csrf.token } })).status()).toBe(401)
-    const reset = await write(request, 'PUT', `/api/admin/users/${user.id}`, { ...user, enabled: true, password: 'Changed-Password-2026!' })
+    const reset = await write(request, 'PUT', `/api/admin/users/${user.id}`, { ...user, enabled: true, departmentId: 3, roles: ['DEPARTMENT_REPORTER'], password: 'Changed-Password-2026!' })
     expect(reset.status()).toBe(200)
     expect(JSON.stringify(await reset.json())).not.toContain('Changed-Password')
+    const resetCsrf = await (await client.get('/api/auth/csrf')).json()
+    expect((await client.post('/api/auth/login', { form: { username: user.username, password: 'Integration-Test-2026!' }, headers: { [resetCsrf.headerName]: resetCsrf.token } })).status()).toBe(401)
     await signIn(client, user.username, 'Changed-Password-2026!')
+    expect(await (await client.get('/api/events')).json()).toMatchObject({ total: 1, items: [{ departmentName: '公安局' }] })
   } finally { await client.dispose() }
+})
+
+test('预置特殊兼任账号与乡镇账号拥有各自归属和权限', async ({ request }) => {
+  await signIn(request, 'special')
+  expect(await (await request.get('/api/auth/me')).json()).toMatchObject({ departmentId: 2, roles: ['DEPARTMENT_REPORTER', 'DEPARTMENT_HANDLER', 'SPECIAL_REPORTER'] })
+  expect(await (await request.get('/api/events')).json()).toMatchObject({ total: 2 })
+  expect((await request.get('/api/admin/users')).status()).toBe(403)
+  await signIn(request, 'town')
+  expect(await (await request.get('/api/auth/me')).json()).toMatchObject({ departmentName: '示例乡镇', roles: ['DEPARTMENT_REPORTER'] })
+  expect(await (await request.get('/api/events')).json()).toMatchObject({ total: 0, items: [] })
 })
 
 test('越权管理、无部门特殊权限及混淆中心部门角色均被拒绝', async ({ request }) => {
