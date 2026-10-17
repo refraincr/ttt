@@ -16,7 +16,10 @@ const query = ref('')
 const appliedQuery = ref('')
 const detail = ref<EventSummary | null>(null)
 const detailOpen = ref(false)
+let sessionVersion = 0
+let detailRequest = 0
 const scope = computed(() => account.value?.roles.includes('CENTER_ANALYST') ? '全部门事件' : '本部门事件')
+const canReadEvents = computed(() => account.value?.roles.some(role => ['CENTER_ANALYST', 'DEPARTMENT_REPORTER'].includes(role)))
 
 function handleError(cause: unknown) {
   error.value = cause instanceof Error ? cause.message : '请求失败'
@@ -24,6 +27,8 @@ function handleError(cause: unknown) {
 }
 
 function clearSession() {
+  sessionVersion++
+  detailRequest++
   account.value = null
   events.value = []
   total.value = 0
@@ -32,17 +37,21 @@ function clearSession() {
   page.value = 1
   query.value = ''
   appliedQuery.value = ''
+  loadingEvents.value = false
 }
 
 async function loadEvents() {
+  const version = sessionVersion
   loadingEvents.value = true
   error.value = ''
   try {
     const result = await api<EventPage>(`/events?page=${page.value}&size=10&q=${encodeURIComponent(appliedQuery.value)}`)
+    if (version !== sessionVersion) return
     events.value = result.items
     total.value = result.total
-  } catch (cause) { events.value = []; total.value = 0; handleError(cause) }
-  finally { loadingEvents.value = false }
+  } catch (cause) {
+    if (version === sessionVersion) { events.value = []; total.value = 0; handleError(cause) }
+  } finally { if (version === sessionVersion) loadingEvents.value = false }
 }
 
 async function signIn() {
@@ -52,8 +61,9 @@ async function signIn() {
   try {
     await api('/auth/login', { method: 'POST', body: new URLSearchParams({ username: username.value.trim(), password: password.value }) })
     password.value = ''
+    sessionVersion++
     account.value = await api<Account>('/auth/me')
-    await loadEvents()
+    if (canReadEvents.value) await loadEvents()
   } catch (cause) {
     handleError(cause)
     if (cause instanceof ApiError && cause.status === 401) error.value = '账号或密码错误，或账号已停用'
@@ -68,16 +78,24 @@ async function signOut() {
 }
 
 async function openDetail(id: number) {
+  const version = sessionVersion
+  const request = ++detailRequest
   detail.value = null
   error.value = ''
-  try { detail.value = await api<EventSummary>(`/events/${id}`); detailOpen.value = true }
-  catch (cause) { handleError(cause) }
+  try {
+    const result = await api<EventSummary>(`/events/${id}`)
+    if (version !== sessionVersion || request !== detailRequest) return
+    detail.value = result
+    detailOpen.value = true
+  } catch (cause) {
+    if (version === sessionVersion && request === detailRequest) handleError(cause)
+  }
 }
 
 function search() { appliedQuery.value = query.value.trim(); page.value = 1; void loadEvents() }
 
 onMounted(async () => {
-  try { account.value = await api<Account>('/auth/me'); await loadEvents() }
+  try { account.value = await api<Account>('/auth/me'); if (canReadEvents.value) await loadEvents() }
   catch (cause) { if (!(cause instanceof ApiError && cause.status === 401)) handleError(cause) }
   finally { initializing.value = false }
 })
@@ -107,9 +125,10 @@ onMounted(async () => {
     <aside class="sidebar"><div class="brand"><span class="brand-mark">治</span><span>社会治理<br><small>分析预警工作台</small></span></div><p class="nav-label">业务工作</p><div class="nav-active">▤ &nbsp; 事件列表</div><div class="sidebar-foot">教学演示系统<br>数据仅用于功能验证</div></aside>
     <section class="main-area">
       <header><span>业务工作 <span class="separator">/</span> 事件列表</span><div class="user-info"><span>{{ account.displayName }} <small>{{ account.departmentName }}</small></span><el-button :loading="busy" @click="signOut">退出登录</el-button></div></header>
-      <main class="content"><div class="page-heading"><div><p class="eyebrow">事件管理</p><h1>事件列表</h1><p class="muted">查看来源记录与事件详情，掌握权限内的上报信息。</p></div><el-tag effect="plain" size="large">{{ scope }}</el-tag></div>
+      <main class="content"><div class="page-heading"><div><p class="eyebrow">事件管理</p><h1>事件列表</h1><p class="muted">查看来源记录与事件详情，掌握权限内的上报信息。</p></div><el-tag v-if="canReadEvents" effect="plain" size="large">{{ scope }}</el-tag></div>
         <el-alert v-if="error" :title="error" type="error" :closable="false" show-icon />
-        <section class="event-card"><div class="card-heading"><h2>来源上报记录 <span>{{ total }}</span></h2><span class="muted">{{ account.departmentName }}</span></div>
+        <el-alert v-if="!canReadEvents" title="当前账号未分配事件查看权限" description="来源事件仅向中心研判或部门上报角色开放。" type="info" :closable="false" show-icon />
+        <section v-if="canReadEvents" class="event-card"><div class="card-heading"><h2>来源上报记录 <span>{{ total }}</span></h2><span class="muted">{{ account.departmentName }}</span></div>
           <form class="filter-bar" @submit.prevent="search"><el-input v-model="query" placeholder="搜索当事人或事件描述" aria-label="搜索事件" clearable maxlength="100" /><el-button type="primary" native-type="submit" :disabled="loadingEvents">查询</el-button><el-button :disabled="loadingEvents" @click="query = ''; search()">重置</el-button></form>
           <el-table v-loading="loadingEvents" :data="events" empty-text="暂无符合条件的事件" stripe>
             <el-table-column prop="id" label="编号" width="80" />

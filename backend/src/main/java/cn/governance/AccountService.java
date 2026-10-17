@@ -21,7 +21,7 @@ public class AccountService implements UserDetailsService {
                           String departmentName, List<String> roles) {
         public boolean canReadAll() { return roles.contains("CENTER_ANALYST"); }
         public boolean canReadDepartment() {
-            return roles.contains("DEPARTMENT_REPORTER") || roles.contains("DEPARTMENT_HANDLER");
+            return roles.contains("DEPARTMENT_REPORTER");
         }
     }
 

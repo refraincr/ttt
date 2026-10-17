@@ -29,14 +29,17 @@ test('普通部门无法通过参数、搜索或猜测编号访问其他部门',
   expect(await (await request.get('/api/events/1')).json()).toMatchObject({ id: 1, personName: '演示张某' })
 })
 
-test('处置角色也仅能读取本部门来源记录，响应不暴露敏感字段和内部路径', async ({ request }) => {
+test('单独处置角色不能读取来源事件列表或详情', async ({ request }) => {
   await signIn(request, 'police')
-  const result = await (await request.get('/api/events')).json()
-  expect(result.total).toBe(1)
-  expect(result.items[0]).toMatchObject({ id: 2, departmentName: '公安局' })
+  expect((await request.get('/api/events')).status()).toBe(403)
+  expect((await request.get('/api/events/2')).status()).toBe(403)
+  expect((await request.get('/api/events/1')).status()).toBe(403)
+})
+
+test('读取响应不暴露敏感字段和内部路径', async ({ request }) => {
+  await signIn(request, 'center')
   const detail = await (await request.get('/api/events/2')).json()
   expect(Object.keys(detail).sort()).toEqual(['id', 'personName', 'eventTime', 'eventCategory', 'disputeType', 'eventDescription', 'eventSource', 'departmentName', 'isCompleted'].sort())
-  expect((await request.get('/api/events/1')).status()).toBe(404)
 })
 
 test('管理员未兼任研判角色时无事件读取权限', async ({ request }) => {
