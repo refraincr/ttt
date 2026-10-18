@@ -7,8 +7,8 @@ const analyst=computed(()=>props.account.roles.includes('CENTER_ANALYST')),admin
 const error=ref(''),message=ref(''),busy=ref(false),sources=ref<Row[]>([]),source=ref<number>(),mappingId=ref<number>(),mappings=ref<Row[]>([]),batches=ref<Row[]>([]),rows=ref<Row[]>([]),selected=ref<number>(),file=ref<File>(),credentials=ref<Row[]>([]),token=ref(''),receipts=ref<Row[]>([])
 const personId=ref<number>(),detail=ref<Row>(),reason=ref(''),manual=ref('MEDIUM'),ruleData=ref<Row>(),draft=ref<Row>(),preview=ref<Row>()
 const thresholds=ref({medium:3,high:5}),keywords=ref<Row[]>([])
-const fields=['personName','idCard','phone','eventTime','description','categoryId','disputeId'],labels=['姓名','身份证','电话','发生时间','问题描述','事件分类','纠纷类型']
-const mappingName=ref(''),columns=ref<Record<string,string>>(Object.fromEntries(fields.map(f=>[f,f]))),categoryAliases=ref(''),disputeAliases=ref(''),timeFormat=ref('ISO')
+const fields=['personName','idCard','phone','eventTime','description','categoryId','disputeId'],labels=['姓名','身份证号','手机号','发生时间','问题描述','事件分类','纠纷类型']
+const mappingName=ref(''),columns=ref<Record<string,string>>(Object.fromEntries(fields.map((f,i)=>[f,labels[i]]))),categoryAliases=ref(''),disputeAliases=ref(''),timeFormat=ref('ISO')
 const credential=ref({name:'',departmentId:0,sourceId:0,specialReport:false})
 const availableMappings=computed(()=>mappings.value.filter(m=>m.source_id===source.value))
 async function run(fn:()=>Promise<void>){if(busy.value)return;busy.value=true;error.value='';message.value='';try{await fn()}catch(e){error.value=e instanceof Error?e.message:'操作失败';if(e instanceof ApiError&&e.status===401)emit('expired')}finally{busy.value=false}}
