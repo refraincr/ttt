@@ -12,10 +12,22 @@ test('草稿保留原始输入，提交校验和所有权受保护', async ({ re
 })
 
 import type { APIRequestContext } from '@playwright/test'
+let fixtures: {source:any;category:any;dispute:any}
+test.beforeAll(async({playwright,baseURL})=>{
+  const admin=await playwright.request.newContext({baseURL})
+  await signIn(admin)
+  const suffix=String(Date.now())
+  fixtures={
+    source:await (await write(admin,'POST','/api/admin/sources',{name:'录入验收来源'+suffix,sourceType:'DEPARTMENT',departmentId:null,enabled:true})).json(),
+    category:await (await write(admin,'POST','/api/admin/dictionaries',{name:'录入类别'+suffix,code:'INTAKE'+suffix,kind:'EVENT_CATEGORY',enabled:true})).json(),
+    dispute:await (await write(admin,'POST','/api/admin/dictionaries',{name:'录入纠纷'+suffix,code:'INTAKE'+suffix,kind:'DISPUTE_TYPE',enabled:true})).json()
+  }
+  await admin.dispose()
+})
 async function entry(request: APIRequestContext, patch: Record<string, unknown> = {}) {
-  const source = (await (await request.get('/api/options/sources')).json())[0]
-  const category = (await (await request.get('/api/options/dictionaries?kind=EVENT_CATEGORY')).json())[0]
-  const dispute = (await (await request.get('/api/options/dictionaries?kind=DISPUTE_TYPE')).json())[0]
+  const source = fixtures.source
+  const category = fixtures.category
+  const dispute = fixtures.dispute
   return { personName: '虚构验收人员', idCard:'', phone:'', eventTime:'2026-10-10T10:00:00', description:'邻居深夜装修产生严重噪音影响休息', sourceId:source.id, categoryId:category.id, disputeId:dispute.id, ...patch }
 }
 async function submit(request: APIRequestContext, data: unknown) {
@@ -49,6 +61,7 @@ test('自动建档、手机号差异不覆盖、唯一姓名手机号匹配和�
   const profile=await (await request.get(`/api/intake/people/${first.record.matched_person_id}`)).json()
   expect(profile.person.phone).toBe(phone)
   expect(profile.events).toHaveLength(4)
+  expect(profile.events.find((e:any)=>e.id===first.record.id).duplicate_review_state).toBe('SUSPECTED')
   const candidates=await (await request.get(`/api/intake/records/${second.record.id}/duplicates`)).json()
   expect(candidates.find((c:any)=>c.id===first.record.id)).toMatchObject({secondsApart:259200,similarity:1})
   const original=await (await request.get(`/api/intake/records/${first.record.id}`)).json()

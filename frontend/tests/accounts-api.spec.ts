@@ -29,7 +29,7 @@ test('管理员新建部门和兼任账号，可通过新账号登录并读取�
   try {
     await signIn(user, username, 'Integration-Test-2026!')
     expect(await (await user.get('/api/auth/me')).json()).toMatchObject({ departmentId: department.id, roles: ['DEPARTMENT_REPORTER', 'DEPARTMENT_HANDLER', 'SPECIAL_REPORTER'] })
-    expect(await (await user.get('/api/events')).json()).toMatchObject({ total: 0, items: [] })
+    expect(await (await user.get('/api/events?q=演示')).json()).toMatchObject({ total: 0, items: [] })
   } finally { await user.dispose() }
 })
 
@@ -39,7 +39,7 @@ test('账号改权、停用和密码重置立即使旧会话失效，旧版本�
   const client = await playwright.request.newContext({ baseURL })
   try {
     await signIn(client, user.username, 'Integration-Test-2026!')
-    expect(await (await client.get('/api/events')).json()).toMatchObject({ total: 2 })
+    expect(await (await client.get('/api/events?q=演示')).json()).toMatchObject({ total: 2 })
     const original = user
     const changed = await write(request, 'PUT', `/api/admin/users/${user.id}`, { ...user, roles: ['DEPARTMENT_HANDLER'] })
     expect(changed.status()).toBe(200)
@@ -47,7 +47,7 @@ test('账号改权、停用和密码重置立即使旧会话失效，旧版本�
     expect((await client.get('/api/auth/me')).status()).toBe(401)
     expect((await write(request, 'PUT', `/api/admin/users/${user.id}`, { ...original, displayName: '旧版本覆盖' })).status()).toBe(409)
     await signIn(client, user.username, 'Integration-Test-2026!')
-    expect((await client.get('/api/events')).status()).toBe(403)
+    expect((await client.get('/api/events?q=演示')).status()).toBe(403)
     const stopped = await write(request, 'PUT', `/api/admin/users/${user.id}`, { ...user, enabled: false })
     expect(stopped.status()).toBe(200)
     user = await stopped.json()
@@ -60,18 +60,18 @@ test('账号改权、停用和密码重置立即使旧会话失效，旧版本�
     const resetCsrf = await (await client.get('/api/auth/csrf')).json()
     expect((await client.post('/api/auth/login', { form: { username: user.username, password: 'Integration-Test-2026!' }, headers: { [resetCsrf.headerName]: resetCsrf.token } })).status()).toBe(401)
     await signIn(client, user.username, 'Changed-Password-2026!')
-    expect(await (await client.get('/api/events')).json()).toMatchObject({ total: 1, items: [{ departmentName: '公安局' }] })
+    expect(await (await client.get('/api/events?q=演示')).json()).toMatchObject({ total: 1, items: [{ departmentName: '公安局' }] })
   } finally { await client.dispose() }
 })
 
 test('预置特殊兼任账号与乡镇账号拥有各自归属和权限', async ({ request }) => {
   await signIn(request, 'special')
   expect(await (await request.get('/api/auth/me')).json()).toMatchObject({ departmentId: 2, roles: ['DEPARTMENT_REPORTER', 'DEPARTMENT_HANDLER', 'SPECIAL_REPORTER'] })
-  expect(await (await request.get('/api/events')).json()).toMatchObject({ total: 2 })
+  expect(await (await request.get('/api/events?q=演示')).json()).toMatchObject({ total: 2 })
   expect((await request.get('/api/admin/users')).status()).toBe(403)
   await signIn(request, 'town')
   expect(await (await request.get('/api/auth/me')).json()).toMatchObject({ departmentName: '示例乡镇', roles: ['DEPARTMENT_REPORTER'] })
-  expect(await (await request.get('/api/events')).json()).toMatchObject({ total: 0, items: [] })
+  expect(await (await request.get('/api/events?q=演示')).json()).toMatchObject({ total: 0, items: [] })
 })
 
 test('越权管理、无部门特殊权限及混淆中心部门角色均被拒绝', async ({ request }) => {
@@ -101,10 +101,10 @@ test('停用部门使账号不可用，重启用不恢复原会话，部门版�
     await signIn(client, user.username, 'Integration-Test-2026!')
     const old = department
     department = await (await write(request, 'PUT', `/api/admin/departments/${department.id}`, { ...department, enabled: false })).json()
-    expect((await client.get('/api/events')).status()).toBe(401)
+    expect((await client.get('/api/events?q=演示')).status()).toBe(401)
     expect((await write(request, 'PUT', `/api/admin/departments/${department.id}`, { ...old, name: '旧版本' })).status()).toBe(409)
     expect((await write(request, 'PUT', `/api/admin/departments/${department.id}`, { ...department, enabled: true })).status()).toBe(200)
-    expect((await client.get('/api/events')).status()).toBe(401)
+    expect((await client.get('/api/events?q=演示')).status()).toBe(401)
     await signIn(client, user.username, 'Integration-Test-2026!')
   } finally { await client.dispose() }
 })
@@ -116,7 +116,7 @@ test('管理员可兼任研判，且不能停用最后一个可用管理员', as
   try {
     await signIn(client, user.username, 'Integration-Test-2026!')
     expect((await client.get('/api/admin/users')).status()).toBe(200)
-    expect((await client.get('/api/events')).status()).toBe(200)
+    expect((await client.get('/api/events?q=演示')).status()).toBe(200)
   } finally {
     await client.dispose()
     user = await (await write(request, 'PUT', `/api/admin/users/${user.id}`, { ...user, enabled: false })).json()

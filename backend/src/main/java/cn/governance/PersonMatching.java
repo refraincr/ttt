@@ -12,15 +12,17 @@ public class PersonMatching {
     private final DuplicateScreening duplicates;
     public PersonMatching(JdbcTemplate jdbc, DuplicateScreening duplicates) { this.jdbc=jdbc; this.duplicates=duplicates; }
     public record Person(long id,String name,String idCard,String phone) {}
+    private static final org.springframework.jdbc.core.RowMapper<Person> PERSON_MAPPER =
+        (r,n)->new Person(r.getLong("id"),r.getString("name"),r.getString("id_card"),r.getString("phone"));
     public List<Person> people(String q) {
         InputChecks.require(q!=null && q.length()<=100,"搜索过长");
-        return jdbc.query("SELECT * FROM tb_person WHERE LOCATE(?,name)>0 OR LOCATE(?,COALESCE(id_card,''))>0 OR LOCATE(?,phone)>0 ORDER BY id LIMIT 100",(r,n)->new Person(r.getLong("id"),r.getString("name"),r.getString("id_card"),r.getString("phone")),q,q,q);
+        return jdbc.query("SELECT * FROM tb_person WHERE LOCATE(?,name)>0 OR LOCATE(?,COALESCE(id_card,''))>0 OR LOCATE(?,phone)>0 ORDER BY id LIMIT 100",PERSON_MAPPER,q,q,q);
     }
     public Person person(long id) {
-        return jdbc.query("SELECT * FROM tb_person WHERE id=?",(r,n)->new Person(r.getLong("id"),r.getString("name"),r.getString("id_card"),r.getString("phone")),id).stream().findFirst().orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND));
+        return jdbc.query("SELECT * FROM tb_person WHERE id=?",PERSON_MAPPER,id).stream().findFirst().orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND));
     }
     private List<Person> conflicts(String name,String card,String phone) {
-        return jdbc.query("SELECT * FROM tb_person WHERE (?<>'' AND id_card=?) OR (?=1 AND phone=?)", (r,n)->new Person(r.getLong("id"),r.getString("name"),r.getString("id_card"),r.getString("phone")),card,card,IdentityValues.phone(phone),phone);
+        return jdbc.query("SELECT * FROM tb_person WHERE (?<>'' AND id_card=?) OR (?=1 AND phone=?)", PERSON_MAPPER,card,card,IdentityValues.phone(phone),phone);
     }
     public void automatic(long recordId,String name,String card,String phone) {
         var candidates=conflicts(name,card,phone);
@@ -56,6 +58,6 @@ public class PersonMatching {
     }
     private void confirm(long recordId,long personId) {
         jdbc.update("UPDATE tb_input_record SET matched_person_id=?, matched_at=CURRENT_TIMESTAMP, match_status=1,identity_review_state='CONFIRMED',version=version+1 WHERE id=?",personId,recordId);
-        duplicates.screen(recordId);
+        jdbc.queryForList("SELECT id FROM tb_input_record WHERE matched_person_id=? AND identity_review_state='CONFIRMED' AND is_deleted=0",Long.class,personId).forEach(duplicates::screen);
     }
 }

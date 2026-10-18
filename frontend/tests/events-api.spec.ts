@@ -10,7 +10,7 @@ async function signIn(request: APIRequestContext, username: string) {
 
 test('中心研判员可查看全部门列表及详情', async ({ request }) => {
   await signIn(request, 'center')
-  const response = await request.get('/api/events')
+  const response = await request.get('/api/events?q=演示')
   expect(response.status()).toBe(200)
   const page = await response.json()
   expect(page.total).toBe(3)
@@ -20,7 +20,7 @@ test('中心研判员可查看全部门列表及详情', async ({ request }) => 
 
 test('普通部门无法通过参数、搜索或猜测编号访问其他部门', async ({ request }) => {
   await signIn(request, 'civil')
-  const result = await (await request.get('/api/events?departmentId=3&all=true')).json()
+  const result = await (await request.get('/api/events?q=演示&departmentId=3&all=true')).json()
   expect(result.total).toBe(2)
   expect(result.items.map((item: { id: number }) => item.id)).toEqual([3, 1])
   expect((await request.get('/api/events/2')).status()).toBe(404)
@@ -31,7 +31,7 @@ test('普通部门无法通过参数、搜索或猜测编号访问其他部门',
 
 test('单独处置角色不能读取来源事件列表或详情', async ({ request }) => {
   await signIn(request, 'police')
-  expect((await request.get('/api/events')).status()).toBe(403)
+  expect((await request.get('/api/events?q=演示')).status()).toBe(403)
   expect((await request.get('/api/events/2')).status()).toBe(403)
   expect((await request.get('/api/events/1')).status()).toBe(403)
 })
@@ -44,14 +44,14 @@ test('读取响应不暴露敏感字段和内部路径', async ({ request }) => 
 
 test('管理员未兼任研判角色时无事件读取权限', async ({ request }) => {
   await signIn(request, 'admin')
-  expect((await request.get('/api/events')).status()).toBe(403)
+  expect((await request.get('/api/events?q=演示')).status()).toBe(403)
   expect((await request.get('/api/events/1')).status()).toBe(403)
 })
 
 test('分页和字面搜索正确，非法分页参数被拒绝', async ({ request }) => {
   await signIn(request, 'center')
-  const first = await (await request.get('/api/events?page=1&size=1')).json()
-  const second = await (await request.get('/api/events?page=2&size=1')).json()
+  const first = await (await request.get('/api/events?q=演示&page=1&size=1')).json()
+  const second = await (await request.get('/api/events?q=演示&page=2&size=1')).json()
   expect(first.total).toBe(3)
   expect(first.items.map((item: { id: number }) => item.id)).toEqual([3])
   expect(second.items.map((item: { id: number }) => item.id)).toEqual([2])
