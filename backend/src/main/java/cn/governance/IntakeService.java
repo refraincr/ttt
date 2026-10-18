@@ -19,8 +19,11 @@ public class IntakeService {
     private final ManagementAudit audit;
     private final PersonMatching matching;
     private final DuplicateScreening duplicates;
-    public IntakeService(JdbcTemplate jdbc,AccountService accounts,CatalogService catalog,ObjectMapper json,ManagementAudit audit,PersonMatching matching,DuplicateScreening duplicates) {
-        this.jdbc=jdbc;this.accounts=accounts;this.catalog=catalog;this.json=json;this.audit=audit;this.matching=matching;this.duplicates=duplicates;
+    private final EventConsolidation events;
+    private final RiskCalculation risk;
+    private final KeywordRecognition keywords;
+    public IntakeService(JdbcTemplate jdbc,AccountService accounts,CatalogService catalog,ObjectMapper json,ManagementAudit audit,PersonMatching matching,DuplicateScreening duplicates,EventConsolidation events,RiskCalculation risk,KeywordRecognition keywords) {
+        this.jdbc=jdbc;this.accounts=accounts;this.catalog=catalog;this.json=json;this.audit=audit;this.matching=matching;this.duplicates=duplicates;this.events=events;this.risk=risk;this.keywords=keywords;
     }
     public Object departments(Authentication auth) {
         analyst(auth);return jdbc.queryForList("SELECT id,name FROM tb_department WHERE enabled=1 AND department_type='DEPARTMENT' ORDER BY id");
@@ -101,7 +104,12 @@ public class IntakeService {
         var rows=jdbc.queryForList("SELECT r.*,p.original_payload,p.source_id,p.category_id,p.dispute_id,p.special_report,p.actor_id FROM tb_input_record r LEFT JOIN tb_record_provenance p ON p.record_id=r.id WHERE r.id=? AND r.is_deleted=0 AND (?=1 OR r.department_id=?)",id,actor.canReadAll(),actor.departmentId());
         if(rows.isEmpty()) throw new ResponseStatusException(HttpStatus.NOT_FOUND);
         var result=rows.getFirst(); if(result.get("original_payload")!=null) result.put("original_payload",decode(result.get("original_payload").toString()));
-        result.put("effectiveCount",0);return result;
+        result.put("effectiveEventId",events.eventId(id));
+        result.put("keywordHits",keywords.record(id));
+        if(actor.canReadAll()) {
+            result.put("duplicateHistory",events.history(id));
+            result.put("effectiveCount",result.get("matched_person_id")==null?0:events.count(((Number)result.get("matched_person_id")).longValue()));
+        }return result;
     }
     public List<Map<String,Object>> reviews(Authentication auth) {
         analyst(auth);return jdbc.queryForList("SELECT id,party_name,party_id_card,party_phone,problem_description,version FROM tb_input_record WHERE identity_review_state='PENDING' AND is_deleted=0 ORDER BY id LIMIT 100");
@@ -118,7 +126,46 @@ public class IntakeService {
     private Long nullOrPositive(Long id) { InputChecks.require(id==null || id>0,"档案编号无效");return id; }
     public List<PersonMatching.Person> people(Authentication auth,String q) { analyst(auth);return matching.people(q); }
     public Map<String,Object> person(Authentication auth,long id) {
-        analyst(auth);return Map.of("person",matching.person(id),"events",jdbc.queryForList("SELECT id,party_name,party_phone,occurred_at,problem_description,identity_review_state,duplicate_review_state,version FROM tb_input_record WHERE matched_person_id=? AND is_deleted=0 ORDER BY occurred_at DESC",id),"effectiveCount",0);
+        analyst(auth);return Map.of("person",matching.person(id),"events",jdbc.queryForList("SELECT id,party_name,party_phone,occurred_at,problem_description,identity_review_state,duplicate_review_state,version FROM tb_input_record WHERE matched_person_id=? AND is_deleted=0 ORDER BY occurred_at DESC",id),"effectiveCount",events.count(id));
+    }
+    public Object keywordRules(Authentication auth) { analyst(auth);return keywords.rules(); }
+    public record Tags(Long version,String tags,String reason) {}
+    @Transactional
+    public Map<String,Object> tags(Authentication auth,long id,Tags input) {
+        lock();var actor=analyst(auth);var before=record(auth,id);
+        InputChecks.version(input.version(),((Number)before.get("version")).longValue());
+        String reason=InputChecks.text(input.reason(),1000,"标注理由");
+        String tags=IdentityValues.clean(input.tags());InputChecks.require(tags.length()<=500,"标签最多500字符");
+        jdbc.update("UPDATE tb_input_record SET keyword_tags=?,modified_by=?,version=version+1 WHERE id=?",tags,actor.username(),id);
+        if(before.get("matched_person_id")!=null) risk.recompute(((Number)before.get("matched_person_id")).longValue());
+        var after=record(auth,id);audit.record(actor,"EVENT_TAGS",id,before,Map.of("record",after,"reason",reason));return after;
+    }
+    public Object duplicateReviews(Authentication auth) {
+        analyst(auth);
+        return jdbc.queryForList("SELECT r.id,r.party_name,r.problem_description,r.occurred_at,r.version,r.matched_person_id FROM tb_input_record r LEFT JOIN tb_event_source_link l ON l.record_id=r.id WHERE l.record_id IS NULL AND r.identity_review_state='CONFIRMED' AND r.is_deleted=0 ORDER BY r.id LIMIT 100");
+    }
+    public record DuplicateReview(Long version,String decision,Long targetRecordId,String reason) {}
+    @Transactional
+    public Map<String,Object> duplicateReview(Authentication auth,long id,DuplicateReview input) {
+        lock();var actor=analyst(auth);var before=record(auth,id);
+        InputChecks.version(input.version(),((Number)before.get("version")).longValue());
+        InputChecks.require("CONFIRMED".equals(before.get("identity_review_state")),"请先确认身份");
+        if(events.eventId(id)!=null) throw new ResponseStatusException(HttpStatus.CONFLICT,"重复审核已经明确，请使用后续归档修正流程");
+        String reason=InputChecks.text(input.reason(),1000,"重复审核理由");
+        InputChecks.require("INDEPENDENT".equals(input.decision()) || "MERGE".equals(input.decision()),"审核结论无效");
+        if("INDEPENDENT".equals(input.decision())) events.independent(id,actor.username(),reason);
+        else {
+            InputChecks.require(input.targetRecordId()!=null && input.targetRecordId()!=id,"请选择其他目标记录");
+            var target=record(auth,input.targetRecordId());
+            InputChecks.require("CONFIRMED".equals(target.get("identity_review_state")) && Objects.equals(before.get("matched_person_id"),target.get("matched_person_id")),"只能合并身份明确且同人的事件");
+            long event=events.independent(input.targetRecordId(),actor.username(),reason);
+            events.attach(id,event,"MERGED",actor.username(),reason);
+        }
+        risk.recompute(((Number)before.get("matched_person_id")).longValue());
+        var after=record(auth,id);audit.record(actor,"DUPLICATE_REVIEW",id,before,Map.of("record",after,"reason",reason));return after;
+    }
+    public RiskCalculation.Snapshot risk(Authentication auth,long id) {
+        analyst(auth);matching.person(id);return risk.snapshot(id);
     }
     public List<DuplicateScreening.Candidate> candidates(Authentication auth,long id) { analyst(auth);record(auth,id);return duplicates.candidates(id); }
     public DuplicateScreening.Settings settings(Authentication auth) { analyst(auth);return duplicates.settings(); }
@@ -128,6 +175,7 @@ public class IntakeService {
         InputChecks.require(input.windowDays()>=0 && input.windowDays()<=365 && Double.isFinite(input.threshold()) && input.threshold()>0 && input.threshold()<=1,"时间窗口需0至365天，相似度需大于0且不超过1");
         jdbc.update("UPDATE tb_duplicate_settings SET window_days=?,threshold=?,version=version+1 WHERE id=1",input.windowDays(),input.threshold());
         jdbc.queryForList("SELECT id FROM tb_input_record WHERE identity_review_state='CONFIRMED' AND is_deleted=0",Long.class).forEach(duplicates::screen);
+        jdbc.queryForList("SELECT id FROM tb_person",Long.class).forEach(risk::recompute);
         var after=duplicates.settings();audit.record(actor,"DUPLICATE_SETTINGS",1,before,after);return after;
     }
 }

@@ -8,7 +8,8 @@ import org.springframework.jdbc.core.JdbcTemplate;
 @Service
 public class DuplicateScreening {
     private final JdbcTemplate jdbc;
-    public DuplicateScreening(JdbcTemplate jdbc) { this.jdbc = jdbc; }
+    private final EventConsolidation events;
+    public DuplicateScreening(JdbcTemplate jdbc, EventConsolidation events) { this.jdbc = jdbc; this.events=events; }
     public record Settings(int windowDays, double threshold, long version) {}
     public record Candidate(long id, String description, LocalDateTime occurredAt, long secondsApart, double similarity, String basis) {}
     public Settings settings() { return jdbc.queryForObject("SELECT * FROM tb_duplicate_settings WHERE id=1", (r,n)->new Settings(r.getInt("window_days"),r.getDouble("threshold"),r.getLong("version"))); }
@@ -37,9 +38,9 @@ public class DuplicateScreening {
             },current.get("matched_person_id"),id,time.minusDays(config.windowDays()),time.plusDays(config.windowDays())).stream().filter(c->c.similarity()>=config.threshold()).toList();
     }
     public void screen(long id) {
-        // 重复审核在任务08实现；此阶段不生成有效事件或有效次数。
-        String state=candidates(id).isEmpty()?"SCREENED":"SUSPECTED";
-        jdbc.update("UPDATE tb_input_record SET duplicate_review_state=? WHERE id=?",state,id);
+        var row=jdbc.queryForMap("SELECT identity_review_state,duplicate_review_state FROM tb_input_record WHERE id=?",id);
+        if(!"CONFIRMED".equals(row.get("identity_review_state")) || events.eventId(id)!=null) return;
+        if(candidates(id).isEmpty()) events.independent(id,"SYSTEM","身份确认且无重复候选，自动归集");
+        else jdbc.update("UPDATE tb_input_record SET duplicate_review_state='SUSPECTED' WHERE id=?",id);
     }
 }
-

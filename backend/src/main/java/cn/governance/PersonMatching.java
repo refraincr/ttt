@@ -10,7 +10,8 @@ import org.springframework.web.server.ResponseStatusException;
 public class PersonMatching {
     private final JdbcTemplate jdbc;
     private final DuplicateScreening duplicates;
-    public PersonMatching(JdbcTemplate jdbc, DuplicateScreening duplicates) { this.jdbc=jdbc; this.duplicates=duplicates; }
+    private final RiskCalculation risk;
+    public PersonMatching(JdbcTemplate jdbc, DuplicateScreening duplicates,RiskCalculation risk) { this.jdbc=jdbc; this.duplicates=duplicates;this.risk=risk; }
     public record Person(long id,String name,String idCard,String phone) {}
     private static final org.springframework.jdbc.core.RowMapper<Person> PERSON_MAPPER =
         (r,n)->new Person(r.getLong("id"),r.getString("name"),r.getString("id_card"),r.getString("phone"));
@@ -59,5 +60,6 @@ public class PersonMatching {
     private void confirm(long recordId,long personId) {
         jdbc.update("UPDATE tb_input_record SET matched_person_id=?, matched_at=CURRENT_TIMESTAMP, match_status=1,identity_review_state='CONFIRMED',version=version+1 WHERE id=?",personId,recordId);
         jdbc.queryForList("SELECT id FROM tb_input_record WHERE matched_person_id=? AND identity_review_state='CONFIRMED' AND is_deleted=0",Long.class,personId).forEach(duplicates::screen);
+        risk.recompute(personId);
     }
 }

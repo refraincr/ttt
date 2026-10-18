@@ -37,7 +37,7 @@ async function submit(request: APIRequestContext, data: unknown) {
   return { draft:d, record:await r.json() }
 }
 function card() {
-  const prefix = '11010119900101'+String(Math.floor(Math.random()*999)+1).padStart(3,'0')
+  const prefix = '110101'+String(1970+Math.floor(Math.random()*35))+String(1+Math.floor(Math.random()*12)).padStart(2,'0')+String(1+Math.floor(Math.random()*28)).padStart(2,'0')+String(Math.floor(Math.random()*999)+1).padStart(3,'0')
   const weights = [7,9,10,5,8,4,2,1,6,3,7,9,10,5,8,4,2]
   return prefix+'10X98765432'[[...prefix].reduce((sum,x,i)=>sum+Number(x)*weights[i],0)%11]
 }
@@ -47,21 +47,21 @@ test('自动建档、手机号差异不覆盖、唯一姓名手机号匹配和�
   const data=await entry(request,{idCard,personName,phone})
   const first=await submit(request,data)
   expect(first.record.identity_review_state).toBe('CONFIRMED')
-  expect(first.record.effectiveCount).toBe(0)
+  expect(first.record.effectiveEventId).toBeGreaterThan(0)
   const second=await submit(request,{...data,phone:'13812345678',eventTime:'2026-10-13T10:00:00'})
   expect(second.record.matched_person_id).toBe(first.record.matched_person_id)
   expect(second.record.duplicate_review_state).toBe('SUSPECTED')
   const fallback=await submit(request,{...data,idCard:'',description:'申请养老服务补助咨询'})
   expect(fallback.record.identity_review_state).toBe('CONFIRMED')
   const outside=await submit(request,{...data,eventTime:'2026-10-16T10:00:01'})
-  expect(outside.record.duplicate_review_state).toBe('SCREENED')
+  expect(outside.record.duplicate_review_state).toBe('INDEPENDENT')
   const retry=await write(request,'POST',`/api/intake/drafts/${first.draft.id}/submit`,{version:first.draft.version})
   expect((await retry.json()).id).toBe(first.record.id)
   await signIn(request,'center')
   const profile=await (await request.get(`/api/intake/people/${first.record.matched_person_id}`)).json()
   expect(profile.person.phone).toBe(phone)
   expect(profile.events).toHaveLength(4)
-  expect(profile.events.find((e:any)=>e.id===first.record.id).duplicate_review_state).toBe('SUSPECTED')
+  expect(profile.events.find((e:any)=>e.id===first.record.id).duplicate_review_state).toBe('INDEPENDENT')
   const candidates=await (await request.get(`/api/intake/records/${second.record.id}/duplicates`)).json()
   expect(candidates.find((c:any)=>c.id===first.record.id)).toMatchObject({secondsApart:259200,similarity:1})
   const original=await (await request.get(`/api/intake/records/${first.record.id}`)).json()

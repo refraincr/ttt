@@ -17,6 +17,11 @@ public class IntakeController {
     @GetMapping("/identity-reviews") public Object reviews(Authentication a) { return service.reviews(a); }
     @PostMapping("/identity-reviews/{id}") public Object review(Authentication a,@PathVariable long id,@RequestBody IntakeService.Review e) { return service.review(a,id,e); }
     @GetMapping("/people") public Object people(Authentication a,@RequestParam(defaultValue="") String q) { return service.people(a,q); }
+    @GetMapping("/duplicate-reviews") public Object duplicateReviews(Authentication a) { return service.duplicateReviews(a); }
+    @GetMapping("/keyword-rules") public Object rules(Authentication a) { return service.keywordRules(a); }
+    @PutMapping("/records/{id}/tags") public Object tags(Authentication a,@PathVariable long id,@RequestBody IntakeService.Tags e) { return service.tags(a,id,e); }
+    @GetMapping("/people/{id}/risk") public Object risk(Authentication a,@PathVariable long id) { return service.risk(a,id); }
+    @PostMapping("/records/{id}/duplicate-review") public Object duplicateReview(Authentication a,@PathVariable long id,@RequestBody IntakeService.DuplicateReview e) { return service.duplicateReview(a,id,e); }
     @GetMapping("/people/{id}") public Object person(Authentication a,@PathVariable long id) { return service.person(a,id); }
     @GetMapping("/records/{id}/duplicates") public Object duplicates(Authentication a,@PathVariable long id) { return service.candidates(a,id); }
     @GetMapping("/duplicate-settings") public Object settings(Authentication a) { return service.settings(a); }
