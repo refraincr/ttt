@@ -4,6 +4,8 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.ContentDisposition;
+import java.nio.charset.StandardCharsets;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -18,8 +20,11 @@ public class BatchController {
     @GetMapping("/api/batches/template") public ResponseEntity<byte[]> template(Authentication a,@RequestParam long sourceId,@RequestParam(required=false) Long mappingId,@RequestParam(defaultValue="csv") String format){return download(service.template(a,sourceId,mappingId,format),"template."+("xlsx".equals(format)?"xlsx":"csv"));}
     @PostMapping("/api/batches") public Object upload(Authentication a,@RequestParam long sourceId,@RequestParam(required=false) Long mappingId,@RequestParam MultipartFile file) throws java.io.IOException{return service.upload(a,sourceId,mappingId,Objects.toString(file.getOriginalFilename(),""),file.getBytes());}
     @GetMapping("/api/batches/{id}/failures") public ResponseEntity<byte[]> failures(Authentication a,@PathVariable long id){return download(service.failures(a,id),"failures.csv");}
-    @GetMapping("/api/batches/{id}/original") public ResponseEntity<byte[]> original(Authentication a,@PathVariable long id){return download(service.original(a,id),"original.bin");}
-    private ResponseEntity<byte[]> download(byte[] bytes,String name){return ResponseEntity.ok().header("Content-Disposition","attachment; filename=\""+name+"\"").header("Content-Type","application/octet-stream").body(bytes);}
+    @GetMapping("/api/batches/{id}/original") public ResponseEntity<byte[]> original(Authentication a,@PathVariable long id){var file=service.original(a,id);return download(file.bytes(),file.filename());}
+    private ResponseEntity<byte[]> download(byte[] bytes,String name){
+        String type=name.toLowerCase(Locale.ROOT).endsWith(".csv")?"text/csv; charset=UTF-8":name.toLowerCase(Locale.ROOT).endsWith(".xlsx")?"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet":"application/octet-stream";
+        return ResponseEntity.ok().header("Content-Disposition",ContentDisposition.attachment().filename(name,StandardCharsets.UTF_8).build().toString()).header("Content-Type",type).body(bytes);
+    }
     @GetMapping("/api/batches/credentials") public Object credentials(Authentication a){return service.credentials(a);}
     @PostMapping("/api/batches/credentials") public Object credential(Authentication a,@RequestBody BatchIntake.Credential c){return service.credential(a,c);}
     @DeleteMapping("/api/batches/credentials/{id}") public void disable(Authentication a,@PathVariable long id){service.disable(a,id);}

@@ -1,7 +1,9 @@
 import {test,expect} from '@playwright/test'
 import {signIn,write,uniqueName} from './support'
 import type {APIRequestContext} from '@playwright/test'
+import {retireTestCatalog} from './catalog-cleanup'
 let source:number,category:number,dispute:number
+test.afterAll(async({playwright,baseURL})=>{const request=await playwright.request.newContext({baseURL});try{await retireTestCatalog(request,[source].filter(Boolean),[category,dispute].filter(Boolean))}finally{await request.dispose()}})
 async function ok(r:any){expect(r.ok(),await r.text()).toBeTruthy();return r.json()}
 test.beforeAll(async({playwright,baseURL})=>{const c=await playwright.request.newContext({baseURL});await signIn(c);source=(await ok(await write(c,'POST','/api/admin/sources',{name:uniqueName('批量'),sourceType:'DEPARTMENT',departmentId:2,enabled:true}))).id;category=(await ok(await write(c,'POST','/api/admin/dictionaries',{name:uniqueName('分类'),code:uniqueName('CAT'),kind:'EVENT_CATEGORY',enabled:true}))).id;dispute=(await ok(await write(c,'POST','/api/admin/dictionaries',{name:uniqueName('纠纷'),code:uniqueName('DIS'),kind:'DISPUTE_TYPE',enabled:true}))).id;await c.dispose()})
 async function upload(c:APIRequestContext,body:string,mappingId?:number){const csrf=await(await c.get('/api/auth/csrf')).json();return ok(await c.post('/api/batches',{headers:{[csrf.headerName]:csrf.token},multipart:{sourceId:String(source),...(mappingId?{mappingId:String(mappingId)}:{}),file:{name:'events.csv',mimeType:'text/csv',buffer:Buffer.from(body)}}}))}

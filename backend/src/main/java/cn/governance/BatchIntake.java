@@ -44,7 +44,13 @@ public class BatchIntake {
     public Object batches(Authentication a){var actor=reporter(a);return jdbc.queryForList("SELECT b.id,b.filename,b.created_at,COUNT(r.id) AS total,SUM(r.state='PENDING') AS pending,SUM(r.state='SUCCESS') AS succeeded,SUM(r.state='FAILED') AS failed,SUM(r.state='DUPLICATE') AS duplicates FROM tb_import_batch b JOIN tb_import_row r ON r.batch_id=b.id WHERE b.owner_id=? OR ?=1 GROUP BY b.id ORDER BY b.id DESC",actor.id(),actor.canReadAll());}
     Map<String,Object> batch(Authentication a,long id){var actor=reporter(a);return jdbc.queryForList("SELECT * FROM tb_import_batch WHERE id=? AND (owner_id=? OR ?=1)",id,actor.id(),actor.canReadAll()).stream().findFirst().orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND));}
     public Object rows(Authentication a,long id){batch(a,id);return jdbc.queryForList("SELECT * FROM tb_import_row WHERE batch_id=? ORDER BY line_number",id);}
-    public byte[] original(Authentication a,long id){return (byte[])batch(a,id).get("original_file");}
+    public record OriginalFile(String filename,byte[] bytes){}
+    public OriginalFile original(Authentication a,long id){
+        var row=batch(a,id);
+        String name=Objects.toString(row.get("filename"),"").replace('\\','/');
+        name=name.substring(name.lastIndexOf('/')+1).replaceAll("[\\p{Cntrl}]","_");
+        return new OriginalFile(name.isBlank()?"original":name,(byte[])row.get("original_file"));
+    }
     public byte[] failures(Authentication a,long id){var batch=batch(a,id);try{var m=json.readValue(batch.get("mapping_snapshot").toString(),Mapping.class);var out=new StringWriter();try(var printer=new CSVPrinter(out,CSVFormat.DEFAULT)){var header=new ArrayList<>(m.columns().values());header.add("原始行号");header.add("错误原因");printer.printRecord(header);for(var row:jdbc.queryForList("SELECT * FROM tb_import_row WHERE batch_id=? AND state='FAILED' ORDER BY line_number",id)){var value=json.readValue(row.get("payload").toString(),Map.class);List<Object> cells=new ArrayList<>();for(String h:m.columns().values())cells.add(csvSafe(Objects.toString(value.get(h),"")));cells.add(row.get("line_number"));cells.add(csvSafe(row.get("error").toString()));printer.printRecord(cells);}}return ("\ufeff"+out).getBytes(StandardCharsets.UTF_8);}catch(IOException e){throw new IllegalStateException(e);}}
     private String csvSafe(String value){return value.matches("^[=+@\\-].*")?"'"+value:value;}
     @Transactional public void process(long rowId){lock();var row=jdbc.queryForMap("SELECT r.*,b.username,b.source_id,b.mapping_snapshot,b.owner_id FROM tb_import_row r JOIN tb_import_batch b ON b.id=r.batch_id WHERE r.id=?",rowId);if(!"PENDING".equals(row.get("state")))return;
@@ -55,11 +61,18 @@ public class BatchIntake {
             Authentication receivedAuth=new AccountService.TrustedIntakeToken(receivedActor);
             var raw=json.readValue(row.get("payload").toString(),Map.class);Map<String,String> v=new HashMap<>();m.columns().forEach((field,column)->v.put(field,Objects.toString(raw.get(column),"").strip()));
             String time=v.get("eventTime");if(!"ISO".equals(m.timeFormat()))time=java.time.LocalDateTime.parse(time,java.time.format.DateTimeFormatter.ofPattern(m.timeFormat())).toString();
-            var entry=new IntakeService.Entry(v.get("personName"),v.get("idCard"),v.get("phone"),time,v.get("description"),((Number)row.get("source_id")).longValue(),classification(v.get("categoryId"),m.categories()),classification(v.get("disputeId"),m.disputes()),actor.canReadAll()?m.receivedDepartmentId():null);
+            var entry=new IntakeService.Entry(v.get("personName"),v.get("idCard"),v.get("phone"),time,v.get("description"),((Number)row.get("source_id")).longValue(),classification(v.get("categoryId"),m.categories(),"EVENT_CATEGORY"),classification(v.get("disputeId"),m.disputes(),"DISPUTE_TYPE"),actor.canReadAll()?m.receivedDepartmentId():null);
             var result=receive(receivedAuth,entry,"FILE:"+actor.id()+":"+m.sourceId(),hashes.fingerprint(entry));jdbc.update("UPDATE tb_import_row SET state=?,record_id=?,error=NULL WHERE id=?",result.get("duplicate").equals(true)?"DUPLICATE":"SUCCESS",result.get("recordId"),rowId);
         }catch(com.fasterxml.jackson.core.JsonProcessingException e){throw new IllegalStateException(e);}
     }
-    private Long classification(String value,Map<String,String> aliases){try{return Long.valueOf(aliases.getOrDefault(value,value));}catch(Exception e){throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"未知分类值："+value);}}
+    private Long classification(String value,Map<String,String> aliases,String kind){
+        String resolved=aliases.getOrDefault(value,value);
+        // Explicit source mappings and numeric IDs keep their existing meaning.
+        try{return Long.valueOf(resolved);}catch(NumberFormatException ignored){}
+        var ids=jdbc.queryForList("SELECT id FROM tb_dictionary_item WHERE kind=? AND name=? AND enabled=1",Long.class,kind,resolved);
+        if(ids.size()==1)return ids.getFirst();
+        throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"未知分类值："+value);
+    }
     private Long department(long source){var value=jdbc.queryForObject("SELECT department_id FROM tb_data_source WHERE id=?",Long.class,source);InputChecks.require(value!=null,"中心导入请选择绑定部门的来源");return value;}
     Map<String,Object> receive(Authentication a,IntakeService.Entry entry,String scope,String key){var existing=jdbc.queryForList("SELECT record_id FROM tb_intake_receipt WHERE scope=? AND external_key=?",Long.class,scope,key);if(!existing.isEmpty())return Map.of("recordId",existing.getFirst(),"duplicate",true);var draft=intake.save(a,null,entry,null);var record=intake.submit(a,draft.id(),draft.version());long id=((Number)record.get("id")).longValue();jdbc.update("INSERT INTO tb_intake_receipt(scope,external_key,record_id) VALUES (?,?,?)",scope,key,id);return Map.of("recordId",id,"duplicate",false);}
     public Object credentials(Authentication a){accounts.administrator(a);return jdbc.queryForList("SELECT id,name,department_id,source_id,special_report,enabled FROM tb_external_credential ORDER BY id DESC");}

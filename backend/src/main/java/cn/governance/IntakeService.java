@@ -83,7 +83,7 @@ public class IntakeService {
         String name=IdentityValues.clean(e.personName()), card=IdentityValues.clean(e.idCard()).toUpperCase(Locale.ROOT), phone=IdentityValues.clean(e.phone());
         InputChecks.require(name.length()<=100 && phone.length()<=32,"身份字段过长");
         InputChecks.require(card.isEmpty() || IdentityValues.card(card),"身份证号无效");
-        String description=InputChecks.text(IdentityValues.clean(e.description()),10000,"问题描述");
+        String description=InputChecks.text(IdentityValues.clean(e.description()).replaceAll("\\h+"," "),10000,"问题描述");
         LocalDateTime time;
         try { time=LocalDateTime.parse(IdentityValues.clean(e.eventTime()).replace(' ','T')); } catch(Exception ex) { throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"发生时间格式无效"); }
         long department=actor.departmentId();

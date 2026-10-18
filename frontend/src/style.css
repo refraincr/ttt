@@ -25,7 +25,7 @@ h1, h2, h3, p { margin-top: 0; }
 .brand small { color: #90afa4; font-size: 11px; font-weight: 400; }
 .nav-label { color: #91aca4; font-size: 11px; margin: 55px 14px 14px; }
 .nav-active { background: #2c5950; border-radius: 7px; padding: 14px 17px; font-size: 14px; }
-.nav-item { display: block; width: 100%; border: 0; color: inherit; background: transparent; text-align: left; padding: 14px 17px; border-radius: 7px; cursor: pointer; margin-bottom: 5px; }
+.nav-item { display: flex; align-items: center; gap: 10px; width: 100%; border: 0; color: inherit; background: transparent; text-align: left; padding: 14px 17px; border-radius: 7px; cursor: pointer; margin-bottom: 5px; }
 .nav-item.nav-active { background: #2c5950; }
 .management-card { background: #fff; border: 1px solid #e2e8ef; border-radius: 9px; padding: 22px; }
 .management-toolbar { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin: 8px 0 20px; }
