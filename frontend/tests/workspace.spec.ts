@@ -51,6 +51,8 @@ test('中心页面展示跨部门记录', async ({ page }) => {
   await page.getByRole('textbox', { name: '密码', exact: true }).fill(process.env.DEMO_PASSWORD || 'Demo-Only-2026!')
   await page.getByRole('button', { name: '登录', exact: true }).click()
   await expect(page.getByText('全部门事件', { exact: true })).toBeVisible()
+  await page.getByRole('textbox', { name: '搜索事件' }).fill('演示')
+  await page.getByRole('button', { name: '查询', exact: true }).click()
   await expect(page.getByRole('row').filter({ hasText: '演示李某' })).toBeVisible()
   await expect(page.getByRole('row').filter({ hasText: '演示张某' })).toBeVisible()
 })

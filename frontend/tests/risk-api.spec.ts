@@ -108,3 +108,10 @@ test('身份未明不能重复审核，跨人合并和旧标签版本被拒绝',
  expect((await write(request,'PUT',`/api/intake/records/${first.id}/tags`,data)).status()).toBe(409)
  const result=await risk(request,first.matched_person_id);expect(result.finalLevel).toBe('MEDIUM');expect(result.keywordHits[0].evidence[0].field).toBe('tags')
 })
+test('关键词证据使用真实有效事件编号，待归集预览不伪造事件编号',async({request})=>{
+ await signIn(request,'civil');const who=identity();const first=await submit(request,{...who,description:'虚构扬言事件'});const second=await submit(request,{...who,description:'虚构扬言事件'})
+ await signIn(request,'center');expect((await write(request,'POST',`/api/intake/records/${second.id}/duplicate-review`,{version:second.version,decision:'MERGE',targetRecordId:first.id,reason:'同一事件来源'})).status()).toBe(200)
+ const merged=await(await request.get(`/api/intake/records/${second.id}`)).json();expect(merged.keywordHits[0].eventId).toBe(merged.effectiveEventId)
+ await signIn(request,'civil');const pending=await submit(request,{personName:'身份未明预览',idCard:'',description:'虚构扬言线索'})
+ expect(pending.keywordHits[0].eventId).toBeNull()
+})

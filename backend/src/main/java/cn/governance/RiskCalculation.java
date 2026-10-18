@@ -9,6 +9,7 @@ import org.springframework.stereotype.Service;
 @Service
 public class RiskCalculation {
     public record Source(long recordId,String description,String tags,String source,long departmentId,boolean specialReport,LocalDateTime eventTime) {}
+    static final org.springframework.jdbc.core.RowMapper<Source> SOURCE_MAPPER = (r,n)->new Source(r.getLong("id"),r.getString("problem_description"),Objects.toString(r.getString("keyword_tags"),""),r.getString("event_source"),r.getLong("department_id"),r.getBoolean("special_report"),r.getObject("occurred_at",LocalDateTime.class));
     public record EffectiveEvent(long id,LocalDateTime eventTime,List<Source> sources) {}
     public record Snapshot(long personId,long effectiveCount,long sourceCount,LocalDateTime lastEventTime,String baseLevel,String finalLevel,boolean specialFloor,String ruleVersion,List<EffectiveEvent> events,List<KeywordRecognition.Hit> keywordHits) {}
     private final JdbcTemplate jdbc;
@@ -20,7 +21,7 @@ public class RiskCalculation {
         var ids=jdbc.queryForList("SELECT id FROM tb_effective_event WHERE person_id=? ORDER BY id",Long.class,personId);
         for(long id:ids) {
             var sources=jdbc.query("SELECT r.*,COALESCE(p.special_report,0) AS special_report FROM tb_event_source_link l JOIN tb_input_record r ON r.id=l.record_id LEFT JOIN tb_record_provenance p ON p.record_id=r.id WHERE l.effective_event_id=? AND r.matched_person_id=? AND r.identity_review_state='CONFIRMED' AND r.duplicate_review_state IN ('INDEPENDENT','MERGED') AND r.is_deleted=0 ORDER BY r.id",
-                (r,n)->new Source(r.getLong("id"),r.getString("problem_description"),Objects.toString(r.getString("keyword_tags"),""),r.getString("event_source"),r.getLong("department_id"),r.getBoolean("special_report"),r.getObject("occurred_at",LocalDateTime.class)),id,personId);
+                SOURCE_MAPPER,id,personId);
             if(!sources.isEmpty()) {
                 // 同一业务事件以最早来源发生时间为事件时间，归集不因晚报时间虚增最近事件时间。
                 var time=sources.stream().map(Source::eventTime).min(LocalDateTime::compareTo).orElseThrow();

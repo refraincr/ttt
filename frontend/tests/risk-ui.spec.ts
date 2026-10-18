@@ -27,5 +27,13 @@ test('中心页面完成重复审核、标签标注并查看风险证据，部�
  await expect(page.getByText('中风险',{exact:true})).toBeVisible();await expect(page.getByRole('heading',{name:`人员 #${confirmed.matched_person_id} 风险依据`})).toBeVisible()
  await expect(page.locator('mark').filter({hasText:'扬言'}).first()).toBeVisible()
  await page.screenshot({path:'test-results/risk-evidence.png',fullPage:true})
+ let release!:()=>void;let delayed=false
+ const gate=new Promise<void>(resolve=>{release=resolve})
+ await page.route(`**/api/intake/records/${first.id}/duplicates`,async route=>{delayed=true;await gate;await route.continue()})
+ await page.getByRole('textbox',{name:'核查来源编号',exact:true}).fill(String(first.id));await page.getByRole('button',{name:'读取来源记录',exact:true}).click()
+ await expect.poll(()=>delayed).toBe(true)
+ await expect(page.getByRole('button',{name:'读取来源记录',exact:true})).toBeDisabled()
+ release();await expect(page.getByRole('heading',{name:`来源记录 #${first.id} · ${personName}`,exact:true})).toBeVisible()
+
  await page.getByRole('button',{name:'退出登录',exact:true}).click();await page.getByRole('textbox',{name:'账号',exact:true}).fill('civil');await page.getByRole('textbox',{name:'密码',exact:true}).fill(demoPassword);await page.getByRole('button',{name:'登录',exact:true}).click();await expect(page.getByRole('button',{name:'归集与风险',exact:true})).toHaveCount(0)
 })

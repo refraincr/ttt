@@ -9,7 +9,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 public class KeywordRecognition {
     public record Rule(long id,String name,List<String> terms,boolean enabled,long version) {}
     public record TextEvidence(long recordId,String field,String text,String term,int start,int end) {}
-    public record Hit(long eventId,long ruleId,String ruleName,long ruleVersion,List<String> terms,List<TextEvidence> evidence) {}
+    public record Hit(Long eventId,long ruleId,String ruleName,long ruleVersion,List<String> terms,List<TextEvidence> evidence) {}
     private final JdbcTemplate jdbc;
     private final ObjectMapper json;
     public KeywordRecognition(JdbcTemplate jdbc,ObjectMapper json) { this.jdbc=jdbc;this.json=json; }
@@ -41,7 +41,9 @@ public class KeywordRecognition {
         return hits;
     }
     public List<Hit> record(long id) {
-        var sources=jdbc.query("SELECT r.*,COALESCE(p.special_report,0) AS special_report FROM tb_input_record r LEFT JOIN tb_record_provenance p ON p.record_id=r.id WHERE r.id=?",(r,n)->new RiskCalculation.Source(r.getLong("id"),r.getString("problem_description"),Objects.toString(r.getString("keyword_tags"),""),r.getString("event_source"),r.getLong("department_id"),r.getBoolean("special_report"),r.getObject("occurred_at",java.time.LocalDateTime.class)),id);
-        return recognize(List.of(new RiskCalculation.EffectiveEvent(id,sources.getFirst().eventTime(),sources)));
+        var sources=jdbc.query("SELECT r.*,COALESCE(p.special_report,0) AS special_report FROM tb_input_record r LEFT JOIN tb_record_provenance p ON p.record_id=r.id WHERE r.id=?",RiskCalculation.SOURCE_MAPPER,id);
+        Long eventId=jdbc.queryForList("SELECT effective_event_id FROM tb_event_source_link WHERE record_id=?",Long.class,id).stream().findFirst().orElse(null);
+        return recognize(List.of(new RiskCalculation.EffectiveEvent(eventId==null?0:eventId,sources.getFirst().eventTime(),sources))).stream()
+            .map(h->new Hit(eventId,h.ruleId(),h.ruleName(),h.ruleVersion(),h.terms(),h.evidence())).toList();
     }
 }
