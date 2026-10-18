@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { api, ApiError, type Account, type EventPage, type EventSummary } from './api'
+import GovernanceTools from './GovernanceTools.vue'
 import RiskWorkspace from './RiskWorkspace.vue'
 import IntakeWorkspace from './IntakeWorkspace.vue'
 import AccountManagement from './AccountManagement.vue'
@@ -137,10 +138,10 @@ onMounted(async () => {
     </section>
   </main>
   <div v-else class="workspace">
-    <aside class="sidebar"><div class="brand"><span class="brand-mark">治</span><span>社会治理<br><small>分析预警工作台</small></span></div><p class="nav-label">业务工作</p><button class="nav-item" :class="{ 'nav-active': section === 'events' }" @click="section = 'events'">▤ &nbsp; 事件列表</button><button v-if="account.roles.includes('CENTER_ANALYST')" class="nav-item" :class="{ 'nav-active': section === 'risk' }" @click="section = 'risk'">归集与风险</button><button v-if="canReadEvents" class="nav-item" :class="{ 'nav-active': section === 'intake' }" @click="section = 'intake'">录入与身份处理</button><button v-if="isAdministrator" class="nav-item" :class="{ 'nav-active': section === 'accounts' }" @click="section = 'accounts'">部门与账号</button><button class="nav-item" :class="{ 'nav-active': section === 'catalog' }" @click="section = 'catalog'">来源与分类</button><div class="sidebar-foot">教学演示系统<br>数据仅用于功能验证</div></aside>
+    <aside class="sidebar"><div class="brand"><span class="brand-mark">治</span><span>社会治理<br><small>分析预警工作台</small></span></div><p class="nav-label">业务工作</p><button class="nav-item" :class="{ 'nav-active': section === 'events' }" @click="section = 'events'">▤ &nbsp; 事件列表</button><button v-if="account.roles.includes('CENTER_ANALYST')" class="nav-item" :class="{ 'nav-active': section === 'risk' }" @click="section = 'risk'">归集与风险</button><button v-if="canReadEvents" class="nav-item" :class="{ 'nav-active': section === 'intake' }" @click="section = 'intake'">录入与身份处理</button><button v-if="isAdministrator" class="nav-item" :class="{ 'nav-active': section === 'accounts' }" @click="section = 'accounts'">部门与账号</button><button class="nav-item" :class="{ 'nav-active': section === 'catalog' }" @click="section = 'catalog'">来源与分类</button><button v-if="canReadEvents || isAdministrator" class="nav-item" :class="{'nav-active':section==='tools'}" @click="section='tools'">规则与批量接入</button><div class="sidebar-foot">教学演示系统<br>数据仅用于功能验证</div></aside>
     <section class="main-area">
       <header><span>工作台 <span class="separator">/</span> {{ section === 'risk' ? '归集与风险' : section === 'intake' ? '录入与身份处理' : section === 'accounts' ? '部门与账号' : section === 'catalog' ? '来源与分类' : '事件列表' }}</span><div class="user-info"><span>{{ account.displayName }} <small>{{ account.departmentName }}</small></span><el-button :loading="busy" @click="signOut">退出登录</el-button></div></header>
-      <RiskWorkspace v-if="section === 'risk' && account.roles.includes('CENTER_ANALYST')" :key="account.id" @expired="clearSession" />
+      <GovernanceTools v-if="section==='tools'" :account="account" @expired="clearSession" /><RiskWorkspace v-else-if="section === 'risk' && account.roles.includes('CENTER_ANALYST')" :key="account.id" @expired="clearSession" />
       <IntakeWorkspace v-else-if="section === 'intake' && canReadEvents" :key="account.id" :account="account" @expired="clearSession" />
       <AccountManagement v-else-if="section === 'accounts' && isAdministrator" :key="account.id" @expired="clearSession" @changed="refreshAccount" />
       <CatalogManagement v-else-if="section === 'catalog'" :key="account.id" :administrator="!!isAdministrator" @expired="clearSession" />

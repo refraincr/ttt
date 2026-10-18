@@ -16,9 +16,10 @@ public class SecurityConfig {
 
     @Bean
     SecurityFilterChain securityFilterChain(HttpSecurity http, AuthenticationAudit audit) throws Exception {
+        http.csrf(csrf -> csrf.ignoringRequestMatchers("/api/external/events"));
         http.authorizeHttpRequests(auth -> auth
                 .dispatcherTypeMatchers(DispatcherType.ERROR).permitAll()
-                .requestMatchers("/api/auth/csrf", "/api/auth/login").permitAll()
+                .requestMatchers("/api/auth/csrf", "/api/auth/login", "/api/external/events").permitAll()
                 .anyRequest().authenticated())
             .requestCache(cache -> cache.disable())
             .exceptionHandling(errors -> errors

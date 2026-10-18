@@ -128,7 +128,7 @@ public class IntakeService {
     public Map<String,Object> person(Authentication auth,long id) {
         analyst(auth);return Map.of("person",matching.person(id),"events",jdbc.queryForList("SELECT id,party_name,party_phone,occurred_at,problem_description,identity_review_state,duplicate_review_state,version FROM tb_input_record WHERE matched_person_id=? AND is_deleted=0 ORDER BY occurred_at DESC",id),"effectiveCount",events.count(id));
     }
-    public Object keywordRules(Authentication auth) { analyst(auth);return keywords.rules(); }
+    public Object keywordRules(Authentication auth) { analyst(auth);return risk.activeRules().keywords(); }
     public record Tags(Long version,String tags,String reason) {}
     @Transactional
     public Map<String,Object> tags(Authentication auth,long id,Tags input) {

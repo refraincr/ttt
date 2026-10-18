@@ -8,6 +8,10 @@ server:
         same-site: lax
         secure: ${COOKIE_SECURE:false}
 spring:
+  servlet:
+    multipart:
+      max-file-size: 5MB
+      max-request-size: 6MB
   datasource:
     url: ${DB_URL:jdbc:mysql://localhost:3306/governance?connectionTimeZone=%2B08:00&forceConnectionTimeZoneToSession=true}
     username: ${DB_USER:governance}

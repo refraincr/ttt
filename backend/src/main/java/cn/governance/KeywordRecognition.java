@@ -20,7 +20,14 @@ public class KeywordRecognition {
         });
     }
     public List<Hit> recognize(List<RiskCalculation.EffectiveEvent> events) {
-        List<Hit> hits=new ArrayList<>();var rules=rules();
+        var payload=jdbc.queryForList("SELECT payload FROM tb_rule_release WHERE state='PUBLISHED' ORDER BY id DESC LIMIT 1",String.class);
+        try { return recognize(events,payload.isEmpty()?rules():json.readValue(payload.getFirst(),RiskCalculation.Rules.class).keywords()); } catch(Exception e) { throw new IllegalStateException(e); }
+    }
+    public List<Hit> recognize(List<RiskCalculation.EffectiveEvent> events,List<Rule> rules) {
+        return recognize(events,rules,false);
+    }
+    private List<Hit> recognize(List<RiskCalculation.EffectiveEvent> events,List<Rule> rules,boolean raw) {
+        List<Hit> hits=new ArrayList<>();
         for(var event:events) for(var rule:rules) {
             if(!rule.enabled()) continue;
             List<TextEvidence> evidence=new ArrayList<>();
@@ -36,9 +43,24 @@ public class KeywordRecognition {
                 if(found.isEmpty()) { complete=false;break; }
                 evidence.addAll(found);
             }
-            if(complete) hits.add(new Hit(event.id(),rule.id(),rule.name(),rule.version(),rule.terms(),evidence));
+            evidence.sort(Comparator.comparingLong(TextEvidence::recordId).thenComparing(TextEvidence::field).thenComparing(TextEvidence::term));
+            if(complete) {
+                var hit=new Hit(event.id(),rule.id(),rule.name(),rule.version(),rule.terms(),evidence);
+                if(raw || jdbc.queryForObject("SELECT COUNT(*) FROM tb_keyword_exclusion WHERE active=1 AND event_id=? AND rule_id=? AND fingerprint=?",Long.class,event.id(),rule.id(),fingerprint(hit))==0) hits.add(hit);
+            }
         }
         return hits;
+    }
+    public void invalidate(long personId,List<RiskCalculation.EffectiveEvent> events,List<Rule> rules) {
+        var hits=recognize(events,rules,true);
+        for(var row:jdbc.queryForList("SELECT x.* FROM tb_keyword_exclusion x JOIN tb_effective_event e ON e.id=x.event_id WHERE e.person_id=? AND x.active=1",personId)) {
+            boolean valid=hits.stream().anyMatch(h->h.eventId().equals(((Number)row.get("event_id")).longValue())&&h.ruleId()==((Number)row.get("rule_id")).longValue()&&fingerprint(h).equals(row.get("fingerprint")));
+            if(!valid) jdbc.update("UPDATE tb_keyword_exclusion SET active=0 WHERE id=?",row.get("id"));
+        }
+    }
+    public String fingerprint(Object value) {
+        try { return java.util.HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256").digest(json.writeValueAsBytes(value))); }
+        catch(Exception e) { throw new IllegalStateException(e); }
     }
     public List<Hit> record(long id) {
         var sources=jdbc.query("SELECT r.*,COALESCE(p.special_report,0) AS special_report FROM tb_input_record r LEFT JOIN tb_record_provenance p ON p.record_id=r.id WHERE r.id=?",RiskCalculation.SOURCE_MAPPER,id);

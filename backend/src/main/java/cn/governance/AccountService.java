@@ -35,7 +35,14 @@ public class AccountService implements UserDetailsService {
         }
     }
 
+    static class TrustedIntakeToken extends org.springframework.security.authentication.AbstractAuthenticationToken {
+        final Account account;
+        TrustedIntakeToken(Account account){super(List.of());this.account=account;}
+        public Object getPrincipal(){return account.username();}
+        public Object getCredentials(){return "";}
+    }
     public Account current(Authentication authentication) {
+        if(authentication instanceof TrustedIntakeToken trusted) return trusted.account;
         return jdbc.query("""
                 SELECT u.id, u.username, u.display_name, u.department_id, d.name
                 FROM tb_user u JOIN tb_department d ON d.id = u.department_id
