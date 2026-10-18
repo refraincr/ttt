@@ -7,6 +7,8 @@ test('页面完成登录、搜索、查看详情、刷新和退出', async ({ pa
   await page.getByRole('button', { name: '登录', exact: true }).click()
   await expect(page.getByRole('heading', { name: '事件列表' })).toBeVisible()
   await expect(page.getByText('本部门事件', { exact: true })).toBeVisible()
+  await page.getByRole('textbox', { name: '搜索事件' }).fill('演示')
+  await page.getByRole('button', { name: '查询', exact: true }).click()
   await expect(page.getByRole('row').filter({ hasText: '演示张某' })).toBeVisible()
   await expect(page.getByRole('row').filter({ hasText: '演示李某' })).toHaveCount(0)
   await page.getByRole('textbox', { name: '搜索事件' }).fill('张某')
@@ -62,6 +64,9 @@ test('切换账号后，旧账号延迟返回的详情不能重新展示', async
   await page.getByRole('textbox', { name: '账号', exact: true }).fill('center')
   await page.getByRole('textbox', { name: '密码', exact: true }).fill(process.env.DEMO_PASSWORD || 'Demo-Only-2026!')
   await page.getByRole('button', { name: '登录', exact: true }).click()
+  await expect(page.getByRole('heading', { name: '事件列表' })).toBeVisible()
+  await page.getByRole('textbox', { name: '搜索事件' }).fill('演示')
+  await page.getByRole('button', { name: '查询', exact: true }).click()
   await expect(page.getByRole('button', { name: '查看事件2', exact: true })).toBeVisible()
   let release!: () => void
   const delayed = new Promise<void>(resolve => { release = resolve })
@@ -80,6 +85,8 @@ test('切换账号后，旧账号延迟返回的详情不能重新展示', async
     await page.getByRole('textbox', { name: '密码', exact: true }).fill(process.env.DEMO_PASSWORD || 'Demo-Only-2026!')
     await page.getByRole('button', { name: '登录', exact: true }).click()
     await expect(page.getByText('本部门事件', { exact: true })).toBeVisible()
+  await page.getByRole('textbox', { name: '搜索事件' }).fill('演示')
+  await page.getByRole('button', { name: '查询', exact: true }).click()
     const received = page.waitForResponse('**/api/events/2')
     release()
     await received
