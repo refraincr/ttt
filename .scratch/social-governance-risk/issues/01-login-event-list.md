@@ -4,9 +4,9 @@
 
 **Blocked by:** None — can start immediately
 
-**Status:** in-progress
+**Status:** done
 
-- [ ] 本机和最小 Compose 环境均能启动，数据重启后保留。
+- [x] 本机和最小 Compose 环境均能启动，数据重启后保留。
 - [x] 中心、普通部门及未登录请求的列表与详情访问范围正确；保留既有事件主表字段。
 - [x] 通过页面与真实 API 验证登录、退出及未授权访问，提供本任务启动说明。
 
@@ -22,3 +22,5 @@
 - Compose 配置通过 `docker compose config --quiet`；Docker Desktop 启动时 Inference manager 初始化失败，未能执行镜像构建、Compose 启动或卷重启验收。因此第一条保持未勾选，任务未标 done，02 仍有未完成前置。
 - 本轮补验：Docker 引擎已恢复（29.6.2），但两次拉取 `mysql:8.0.46` 分别在 Docker Hub 认证与镜像清单请求时返回 EOF，仍未完成 Compose 运行验收。用户明确要求继续 02/03，按本轮授权推进这两项，01 仍保持进行中。
 
+
+- 2026-10-18 最终补验：Docker Engine恢复且镜像已成功下载；全新 Compose 项目启动、Nginx生产资源/代理、登录写入及down/up重建后的MySQL卷持久化均通过。证据：`.local/verification/governance-verify-4211d2c2-ceaf-4e34-8e45-b860f3cd3036/summary.json`，历史缺口关闭。

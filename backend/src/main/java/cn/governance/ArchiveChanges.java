@@ -126,6 +126,7 @@ public class ArchiveChanges {
         jdbc.update("UPDATE tb_person SET merged_into=?,id_card=NULL,version=version+1 WHERE id=?",input.targetPersonId(),id);
         jdbc.update("UPDATE tb_person SET id_card=COALESCE(id_card,?),version=version+1 WHERE id=?",before.get("id_card"),input.targetPersonId());
         history("MERGE",id,input.targetPersonId(),null,reason,actor.username(),Map.of("source",before,"target",target,"records",links),jdbc.queryForMap("SELECT * FROM tb_person WHERE id=?",input.targetPersonId()));
+        jdbc.update("UPDATE tb_handling_task SET archive_pending=1,version=version+1 WHERE state<>'CLOSED' AND person_id IN (?,?)",id,input.targetPersonId());
         risk.recompute(id);risk.recompute(input.targetPersonId());return Map.of("personId",input.targetPersonId());
     }
     @Transactional
@@ -133,7 +134,7 @@ public class ArchiveChanges {
         lock();var actor=intake.analyst(a);var before=intake.record(a,record);
         InputChecks.version(input.version(),number(before,"version"));
         InputChecks.require(before.get("matched_person_id")!=null && before.get("effectiveEventId")!=null,"仅已归档记录可拆分");
-        long old=number(before,"matched_person_id");InputChecks.require(old!=input.targetPersonId(),"请选择不同目标档案");
+        long old=number(before,"matched_person_id");jdbc.update("UPDATE tb_handling_task SET archive_pending=1,version=version+1 WHERE state<>'CLOSED' AND person_id IN (?,?)",old,input.targetPersonId());InputChecks.require(old!=input.targetPersonId(),"请选择不同目标档案");
         person(input.targetPersonId(),input.targetVersion());String reason=InputChecks.text(input.reason(),1000,"拆分理由");
         jdbc.update("DELETE FROM tb_event_source_link WHERE record_id=?",record);
         jdbc.update("UPDATE tb_input_record SET duplicate_review_state='PENDING',version=version+1 WHERE id=?",record);

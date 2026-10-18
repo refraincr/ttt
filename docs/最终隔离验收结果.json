@@ -1,0 +1,30 @@
+[
+  {
+    "name": "Docker availability",
+    "status": "passed"
+  },
+  {
+    "name": "Frontend dependencies",
+    "status": "passed"
+  },
+  {
+    "name": "Browser dependencies",
+    "status": "passed"
+  },
+  {
+    "name": "Isolated MySQL/API/web startup",
+    "status": "passed"
+  },
+  {
+    "name": "Production assets, Nginx API proxy, login and database write",
+    "status": "passed"
+  },
+  {
+    "name": "Container recreation and MySQL volume persistence",
+    "status": "passed"
+  },
+  {
+    "name": "HTTP/MySQL and browser behavior tests",
+    "status": "passed"
+  }
+]

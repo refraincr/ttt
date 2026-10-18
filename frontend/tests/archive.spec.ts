@@ -1,9 +1,12 @@
 import {test,expect} from '@playwright/test'
 import {signIn,write,uniqueName} from './support'
+import {setupCases} from './cases-support'
+let fixture:any
+test.beforeAll(async({playwright,baseURL})=>{const c=await playwright.request.newContext({baseURL});fixture=await setupCases(c);await c.dispose()})
 async function ok(r:any){expect(r.ok(),await r.text()).toBeTruthy();return r.json()}
 async function archived(request:any,name=uniqueName('虚构档案'),phone='138'+String(Date.now()).slice(-8),actor='civil'){
- await signIn(request,actor);const sources=await ok(await request.get('/api/options/sources'));const categories=await ok(await request.get('/api/options/dictionaries?kind=EVENT_CATEGORY'));const disputes=await ok(await request.get('/api/options/dictionaries?kind=DISPUTE_TYPE'));
- const d=await ok(await write(request,'POST','/api/intake/drafts',{personName:name,idCard:'',phone,eventTime:'2026-10-01T10:00:00',description:uniqueName('普通情况'),sourceId:sources[0].id,categoryId:categories[0].id,disputeId:disputes[0].id}));let r=await ok(await write(request,'POST',`/api/intake/drafts/${d.id}/submit`,{version:d.version}));await signIn(request,'center');if(r.identity_review_state==='PENDING')r=await ok(await write(request,'POST',`/api/intake/identity-reviews/${r.id}`,{version:r.version,personName:name,idCard:'',phone,reason:'已核实可靠姓名电话'}));return r
+ await signIn(request,actor);
+ const d=await ok(await write(request,'POST','/api/intake/drafts',{personName:name,idCard:'',phone,eventTime:'2026-10-01T10:00:00',description:uniqueName('普通情况'),sourceId:fixture.sourceId,categoryId:fixture.categoryId,disputeId:fixture.disputeId}));let r=await ok(await write(request,'POST',`/api/intake/drafts/${d.id}/submit`,{version:d.version}));await signIn(request,'center');if(r.identity_review_state==='PENDING')r=await ok(await write(request,'POST',`/api/intake/identity-reviews/${r.id}`,{version:r.version,personName:name,idCard:'',phone,reason:'已核实可靠姓名电话'}));return r
 }
 test('待审旧版本、驳回、修正重匹配、删除重算和重复审核冲突',async({request})=>{
  let r=await archived(request);const old=r.matched_person_id;const initial=await ok(await request.get('/api/intake/people/'+old+'/risk'));expect(initial.effectiveCount).toBe(1);

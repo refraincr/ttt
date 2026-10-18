@@ -40,15 +40,38 @@ public class HandlingTasks {
         InputChecks.require(page>=1 && page<=1000000 && size>=1 && size<=100,"分页无效");
         String scope=" WHERE (?=1 OR t.department_id=?) AND (?='' OR t.state=?)";
         long total=jdbc.queryForObject("SELECT COUNT(*) FROM tb_handling_task t"+scope,Long.class,actor.canReadAll(),actor.departmentId(),state,state);
-        var items=jdbc.queryForList("SELECT t.id,t.alert_id,t.person_id,t.title,t.department_id,d.name AS department_name,t.state,t.version,t.deadline,t.created_at,t.submitted_at,t.closed_at FROM tb_handling_task t JOIN tb_department d ON d.id=t.department_id"+scope+" ORDER BY t.id DESC LIMIT ? OFFSET ?",actor.canReadAll(),actor.departmentId(),state,state,size,(long)(page-1)*size);
-        return Map.of("items",items,"total",total);
+        var items=jdbc.queryForList("SELECT t.id,t.alert_id,t.person_id,t.title,t.department_id,d.name AS department_name,t.state,t.version,t.deadline,t.created_at,t.submitted_at,t.closed_at,t.archive_pending FROM tb_handling_task t JOIN tb_department d ON d.id=t.department_id"+scope+" ORDER BY t.id DESC LIMIT ? OFFSET ?",actor.canReadAll(),actor.departmentId(),state,state,size,(long)(page-1)*size);
+        items.forEach(this::timing);return Map.of("items",items,"total",total);
     }
     public Object detail(Authentication a,long id) {
-        var row=task(a,id);row.put("dispatch_snapshot",decode(row.get("dispatch_snapshot")));
+        var row=task(a,id);timing(row);row.put("dispatch_snapshot",decode(row.get("dispatch_snapshot")));
         row.put("events",jdbc.queryForList("SELECT event_id FROM tb_task_event WHERE task_id=? ORDER BY event_id",Long.class,id));
         row.put("history",jdbc.queryForList("SELECT * FROM tb_task_note WHERE task_id=? ORDER BY id",id));
         row.put("attachments",jdbc.queryForList("SELECT id,note_id,file_name,stage,owner_username,created_at FROM tb_task_attachment WHERE task_id=? ORDER BY id",id));
         return row;
+    }
+    private void requireConfirmed(Map<String,Object> row) {
+        if(Boolean.TRUE.equals(row.get("archive_pending"))) throw new ResponseStatusException(HttpStatus.CONFLICT,"归档变化待中心确认");
+    }
+    private LocalDateTime date(Object o){return o instanceof java.sql.Timestamp t?t.toLocalDateTime():(LocalDateTime)o;}
+    private void timing(Map<String,Object> row) {
+        var now=LocalDateTime.now(clock);
+        var deadline=date(row.get("deadline"));
+        row.put("departmentOverdue",BusinessTime.departmentOverdue(row.get("state").toString(),deadline,clock));
+        row.put("reviewWaitSeconds",BusinessTime.reviewWait(row.get("state").toString(),row.get("submitted_at")==null?null:date(row.get("submitted_at")),clock));
+    }
+    public record Confirmation(Long version,long personId,List<Long> eventIds,long departmentId,String instruction,String contact,String summary,String reason) {}
+    @Transactional public Object confirm(Authentication a,long id,Confirmation input) {
+        lock();var actor=intake.analyst(a);var before=task(a,id);InputChecks.version(input.version(),((Number)before.get("version")).longValue());
+        InputChecks.require(!"CLOSED".equals(before.get("state")) && Boolean.TRUE.equals(before.get("archive_pending")),"任务无需确认或已关闭");
+        var events=ids(input.eventIds(),100);InputChecks.require(!events.isEmpty() && effectiveIds(input.personId()).containsAll(events),"选择正确人员及有效事件");
+        InputChecks.require(jdbc.queryForObject("SELECT COUNT(*) FROM tb_department WHERE id=? AND enabled=1 AND department_type='DEPARTMENT'",Long.class,input.departmentId())==1,"承办部门无效");
+        String reason=InputChecks.text(input.reason(),1000,"确认理由"),instruction=InputChecks.text(input.instruction(),10000,"授权说明"),contact=optional(input.contact(),500,"联系方式"),summary=optional(input.summary(),10000,"摘要");
+        // Prior attachments and progress remain with the original department; transferring to another department requires a new task.
+        InputChecks.require(((Number)before.get("department_id")).longValue()==input.departmentId(),"变更承办部门请重新派发任务，防止旧附件越权");
+        jdbc.update("DELETE FROM tb_task_event WHERE task_id=?",id);for(long event:events)jdbc.update("INSERT INTO tb_task_event VALUES (?,?)",id,event);
+        jdbc.update("UPDATE tb_handling_task SET person_id=?,instruction=?,contact=?,summary=?,archive_pending=0,state='RETURNED',submitted_at=NULL,version=version+1 WHERE id=?",input.personId(),instruction,contact,summary,id);
+        var after=task(a,id);JdbcIds.insert(jdbc,"INSERT INTO tb_task_confirmation(task_id,actor,reason,before_data,after_data) VALUES (?,?,?,?,?)",id,actor.username(),reason,encode(before),encode(after));note(id,"CONFIRM",reason,actor.username(),events);audit.record(actor,"TASK_CONFIRMATION",id,before,after);return detail(a,id);
     }
     public record Dispatch(Long version,long personId,List<Long> eventIds,long departmentId,String deadline,String title,String instruction,String contact,String summary,List<Long> attachmentIds) {}
     private List<Long> ids(List<Long> ids,int limit) {
@@ -82,7 +105,7 @@ public class HandlingTasks {
     }
     public record Progress(Long version,String content,boolean submit,List<Long> attachmentIds) {}
     @Transactional public Object progress(Authentication a,long id,Progress input) {
-        lock();var actor=reader(a);var before=task(a,id);handler(a,before);InputChecks.version(input.version(),((Number)before.get("version")).longValue());
+        lock();var actor=reader(a);var before=task(a,id);handler(a,before);requireConfirmed(before);InputChecks.version(input.version(),((Number)before.get("version")).longValue());
         if(!Set.of("ASSIGNED","RETURNED").contains(before.get("state"))) throw new ResponseStatusException(HttpStatus.CONFLICT,"当前阶段不可跟进或重复提交");
         String content=InputChecks.text(input.content(),10000,input.submit()?"处理结果":"跟进内容");
         var attachments=ids(input.attachmentIds(),20);validateAttachments(actor,attachments);
@@ -93,7 +116,7 @@ public class HandlingTasks {
     }
     public record Review(Long version,String decision,String reason,List<Long> completeEventIds) {}
     @Transactional public Object review(Authentication a,long id,Review input) {
-        lock();var actor=intake.analyst(a);var before=task(a,id);InputChecks.version(input.version(),((Number)before.get("version")).longValue());
+        lock();var actor=intake.analyst(a);var before=task(a,id);requireConfirmed(before);InputChecks.version(input.version(),((Number)before.get("version")).longValue());
         if(!"SUBMITTED".equals(before.get("state"))) throw new ResponseStatusException(HttpStatus.CONFLICT,"仅待审任务可审核");
         InputChecks.require(Set.of("RETURN","CLOSE").contains(Objects.toString(input.decision(),"")),"审核结论无效");String reason=InputChecks.text(input.reason(),2000,"审核理由");
         var completed=ids(input.completeEventIds(),100);InputChecks.require("CLOSE".equals(input.decision()) || completed.isEmpty(),"退回不能办结事件");

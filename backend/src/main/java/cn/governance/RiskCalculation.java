@@ -72,6 +72,12 @@ public class RiskCalculation {
             jdbc.update("INSERT INTO tb_person_risk(person_id,snapshot) VALUES (?,?) ON DUPLICATE KEY UPDATE snapshot=VALUES(snapshot)",personId,json.writeValueAsString(snapshot)); }
         catch(com.fasterxml.jackson.core.JsonProcessingException e) { throw new IllegalStateException("风险依据保存失败",e); }
     }
+    public void initializeAlerts() {
+        for(String value:jdbc.queryForList("SELECT r.snapshot FROM tb_person_risk r WHERE JSON_UNQUOTE(JSON_EXTRACT(r.snapshot,'$.finalLevel')) IN ('MEDIUM','HIGH') AND NOT EXISTS(SELECT 1 FROM tb_alert a WHERE a.person_id=r.person_id)",String.class)) {
+            try {var saved=json.readValue(value,Snapshot.class);alerts.changed(saved,saved);}
+            catch(com.fasterxml.jackson.core.JsonProcessingException e){throw new IllegalStateException(e);}
+        }
+    }
     public Snapshot snapshot(long personId) {
         var rows=jdbc.queryForList("SELECT snapshot FROM tb_person_risk WHERE person_id=?",String.class,personId);
         if(rows.isEmpty()) return calculate(personId);

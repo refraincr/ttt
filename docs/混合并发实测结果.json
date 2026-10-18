@@ -1,0 +1,152 @@
+{
+  "baseURL": "http://127.0.0.1:8082",
+  "tag": "混合cf092780-a266-4c6c-9eca-1d5e5cc39bbc",
+  "started": "2026-10-18T09:19:04.947Z",
+  "workload": "20 simultaneous workflows: 4 list + 4 detail + 4 intake + 4 identity-review + 4 task submissions; rule recalculation runs concurrently",
+  "previewMs": 42071,
+  "previewPeople": 10020,
+  "mixedMs": 262,
+  "workflowTimes": [
+    {
+      "i": 0,
+      "elapsedMs": 157
+    },
+    {
+      "i": 1,
+      "elapsedMs": 156
+    },
+    {
+      "i": 2,
+      "elapsedMs": 155
+    },
+    {
+      "i": 3,
+      "elapsedMs": 156
+    },
+    {
+      "i": 4,
+      "elapsedMs": 13
+    },
+    {
+      "i": 5,
+      "elapsedMs": 13
+    },
+    {
+      "i": 6,
+      "elapsedMs": 13
+    },
+    {
+      "i": 7,
+      "elapsedMs": 13
+    },
+    {
+      "i": 8,
+      "elapsedMs": 261
+    },
+    {
+      "i": 9,
+      "elapsedMs": 215
+    },
+    {
+      "i": 10,
+      "elapsedMs": 244
+    },
+    {
+      "i": 11,
+      "elapsedMs": 230
+    },
+    {
+      "i": 12,
+      "elapsedMs": 93
+    },
+    {
+      "i": 13,
+      "elapsedMs": 139
+    },
+    {
+      "i": 14,
+      "elapsedMs": 119
+    },
+    {
+      "i": 15,
+      "elapsedMs": 164
+    },
+    {
+      "i": 16,
+      "elapsedMs": 172
+    },
+    {
+      "i": 17,
+      "elapsedMs": 200
+    },
+    {
+      "i": 18,
+      "elapsedMs": 180
+    },
+    {
+      "i": 19,
+      "elapsedMs": 189
+    }
+  ],
+  "recalculationMs": 159483,
+  "job": {
+    "id": 2,
+    "release_id": 3,
+    "state": "COMPLETED",
+    "completed": 10028,
+    "total": 10028,
+    "error": null,
+    "created_at": "2026-10-18T17:20:23.000+08:00"
+  },
+  "people": [
+    {
+      "id": 1010020,
+      "count": 1,
+      "level": "MEDIUM",
+      "version": "RELEASE-3"
+    },
+    {
+      "id": 1010022,
+      "count": 1,
+      "level": "MEDIUM",
+      "version": "RELEASE-3"
+    },
+    {
+      "id": 1010021,
+      "count": 1,
+      "level": "MEDIUM",
+      "version": "RELEASE-3"
+    },
+    {
+      "id": 1010023,
+      "count": 1,
+      "level": "MEDIUM",
+      "version": "RELEASE-3"
+    },
+    {
+      "id": 1010024,
+      "count": 1,
+      "level": "MEDIUM",
+      "version": "RELEASE-3"
+    },
+    {
+      "id": 1010025,
+      "count": 1,
+      "level": "MEDIUM",
+      "version": "RELEASE-3"
+    },
+    {
+      "id": 1010026,
+      "count": 1,
+      "level": "MEDIUM",
+      "version": "RELEASE-3"
+    },
+    {
+      "id": 1010027,
+      "count": 1,
+      "level": "MEDIUM",
+      "version": "RELEASE-3"
+    }
+  ],
+  "finished": "2026-10-18T09:23:03.249Z"
+}

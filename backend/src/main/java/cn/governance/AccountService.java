@@ -43,15 +43,16 @@ public class AccountService implements UserDetailsService {
     }
     public Account current(Authentication authentication) {
         if(authentication instanceof TrustedIntakeToken trusted) return trusted.account;
-        return jdbc.query("""
+        var found=jdbc.query("""
                 SELECT u.id, u.username, u.display_name, u.department_id, d.name
                 FROM tb_user u JOIN tb_department d ON d.id = u.department_id
                 WHERE u.id = ? AND u.session_version = ? AND u.enabled = 1 AND d.enabled = 1
                 """, (rs, row) -> new Account(rs.getLong(1), rs.getString(2), rs.getString(3),
-                        rs.getLong(4), rs.getString(5), roles(rs.getLong(1))),
+                        rs.getLong(4), rs.getString(5), List.of()),
                         ((SessionUser) authentication.getPrincipal()).accountId,
                         ((SessionUser) authentication.getPrincipal()).sessionVersion)
                 .stream().findFirst().orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "账号不可用"));
+        return new Account(found.id(),found.username(),found.displayName(),found.departmentId(),found.departmentName(),roles(found.id()));
     }
 
     private List<String> roles(long id) {
@@ -64,15 +65,10 @@ public class AccountService implements UserDetailsService {
         return account;
     }
 
+    private record Login(long id,long version,String username,String password,boolean enabled) {}
     @Override
     public UserDetails loadUserByUsername(String username) {
-        return jdbc.query("""
-                SELECT u.id, u.username, u.password_hash, u.enabled, u.session_version, d.enabled AS department_enabled
-                FROM tb_user u JOIN tb_department d ON d.id = u.department_id WHERE u.username = ?
-                """, (rs, row) -> new SessionUser(rs.getLong("id"), rs.getLong("session_version"), User.withUsername(rs.getString("username"))
-                        .password(rs.getString("password_hash"))
-                        .disabled(!rs.getBoolean("enabled") || !rs.getBoolean("department_enabled"))
-                        .authorities(roles(rs.getLong("id")).toArray(String[]::new)).build()), username)
-                .stream().findFirst().orElseThrow(() -> new UsernameNotFoundException("账号或密码错误"));
+        var login=jdbc.query("SELECT u.id,u.session_version,u.username,u.password_hash,u.enabled AND d.enabled AS active FROM tb_user u JOIN tb_department d ON d.id=u.department_id WHERE u.username=?",(rs,n)->new Login(rs.getLong(1),rs.getLong(2),rs.getString(3),rs.getString(4),rs.getBoolean(5)),username).stream().findFirst().orElseThrow(()->new UsernameNotFoundException("账号或密码错误"));
+        return new SessionUser(login.id(),login.version(),User.withUsername(login.username()).password(login.password()).disabled(!login.enabled()).authorities(roles(login.id()).toArray(String[]::new)).build());
     }
 }

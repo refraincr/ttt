@@ -19,6 +19,7 @@ public class CaseController {
     @GetMapping("/settings") public Object settings(Authentication a) {return alerts.settings(a);}
     @PutMapping("/settings") public Object settings(Authentication a,@RequestBody AlertService.Settings input) {return alerts.configure(a,input);}
     @PostMapping("/alerts/{id}/tasks") public Object dispatch(Authentication a,@PathVariable long id,@RequestBody HandlingTasks.Dispatch input) {return tasks.dispatch(a,id,input);}
+    @PostMapping("/tasks/{id}/confirm") public Object confirm(Authentication a,@PathVariable long id,@RequestBody HandlingTasks.Confirmation input) {return tasks.confirm(a,id,input);}
     @GetMapping("/tasks") public Object tasks(Authentication a,@RequestParam(defaultValue="") String state,@RequestParam(defaultValue="1") int page,@RequestParam(defaultValue="20") int size) {return tasks.list(a,state,page,size);}
     @GetMapping("/tasks/{id}") public Object task(Authentication a,@PathVariable long id) {return tasks.detail(a,id);}
     @PostMapping("/tasks/{id}/progress") public Object progress(Authentication a,@PathVariable long id,@RequestBody HandlingTasks.Progress input) {return tasks.progress(a,id,input);}

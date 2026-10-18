@@ -13,5 +13,5 @@ export default defineConfig({
     trace: 'retain-on-failure',
     launchOptions: { executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || undefined },
   },
-  reporter: 'list',
+  reporter: [['list'], ['html', { open: 'never' }]],
 })

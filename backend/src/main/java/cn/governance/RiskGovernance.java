@@ -70,10 +70,17 @@ public class RiskGovernance {
     public Object preview(Authentication a,@PathVariable long id){
         lock();intake.analyst(a);var config=config(id);List<Object> changes=new ArrayList<>();
         int up=0,down=0;
-        for(long person:jdbc.queryForList("SELECT id FROM tb_person ORDER BY id",Long.class)){var before=risk.calculate(person);var after=risk.calculate(person,config,"RELEASE-"+id);if(!before.finalLevel().equals(after.finalLevel())){if(rank(after.finalLevel())>rank(before.finalLevel()))up++;else down++;}changes.add(Map.of("personId",person,"before",before,"after",after));}
-        var result=Map.of("up",up,"down",down,"affected",up+down,"data",changes,"rules",config);
-        jdbc.update("INSERT INTO tb_rule_preview(release_id,draft_version,evidence) SELECT id,version,? FROM tb_rule_release WHERE id=?",encode(result),id);return result;
+        long preview=JdbcIds.insert(jdbc,"INSERT INTO tb_rule_preview(release_id,draft_version,evidence) SELECT id,version,'{}' FROM tb_rule_release WHERE id=?",id);
+        for(long person:jdbc.queryForList("SELECT id FROM tb_person ORDER BY id",Long.class)){
+            var before=risk.snapshot(person);var after=risk.calculate(person,config,"RELEASE-"+id);
+            if(!before.finalLevel().equals(after.finalLevel())){if(rank(after.finalLevel())>rank(before.finalLevel()))up++;else down++;}
+            jdbc.update("INSERT INTO tb_rule_preview_person(preview_id,person_id,before_data,after_data) VALUES (?,?,?,?)",preview,person,encode(before),encode(after));
+            changes.add(Map.of("personId",person,"before",before.finalLevel(),"after",after.finalLevel()));
+        }
+        var result=Map.of("previewId",preview,"up",up,"down",down,"affected",up+down,"data",changes,"rules",config);
+        jdbc.update("UPDATE tb_rule_preview SET evidence=? WHERE id=?",encode(result),preview);return result;
     }
+    @GetMapping("/previews/{id}/people") public Object previewPeople(Authentication a,@PathVariable long id,@RequestParam(defaultValue="1") int page){intake.analyst(a);InputChecks.require(page>0&&page<=1000000,"分页无效");return jdbc.queryForList("SELECT * FROM tb_rule_preview_person WHERE preview_id=? ORDER BY person_id LIMIT 20 OFFSET ?",id,(long)(page-1)*20);}
     private int rank(String level){return List.of("LOW","MEDIUM","HIGH").indexOf(level);}
     @PostMapping("/rules/{id}/publish") @Transactional
     public Object publish(Authentication a,@PathVariable long id,@RequestBody IntakeService.Version version){
@@ -94,9 +101,9 @@ class RiskRecalculationWorker {
         var jobs=jdbc.queryForList("SELECT * FROM tb_recalculation WHERE state='PENDING' ORDER BY id LIMIT 1");if(jobs.isEmpty())return;
         var job=jobs.getFirst();long id=((Number)job.get("id")).longValue();
         if(!risk.activeVersion().equals("RELEASE-"+job.get("release_id"))){jdbc.update("UPDATE tb_recalculation SET state='SUPERSEDED' WHERE id=?",id);return;}
-        try {long completed=((Number)job.get("completed")).longValue();var people=jdbc.queryForList("SELECT id FROM tb_person ORDER BY id LIMIT 20 OFFSET ?",Long.class,completed);
+        try {long completed=((Number)job.get("completed")).longValue();var people=jdbc.queryForList("SELECT id FROM tb_person ORDER BY id LIMIT 200 OFFSET ?",Long.class,completed);
             for(long person:people)risk.recompute(person);
-            jdbc.update("UPDATE tb_recalculation SET completed=completed+?,state=?,total=(SELECT COUNT(*) FROM tb_person),error=NULL WHERE id=?",people.size(),people.size()<20?"COMPLETED":"PENDING",id);
+            jdbc.update("UPDATE tb_recalculation SET completed=completed+?,state=?,total=(SELECT COUNT(*) FROM tb_person),error=NULL WHERE id=?",people.size(),people.size()<200?"COMPLETED":"PENDING",id);
         }catch(Exception e){jdbc.update("UPDATE tb_recalculation SET state='FAILED',error=? WHERE id=?",e.getMessage(),id);}
     }
 }

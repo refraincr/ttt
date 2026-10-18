@@ -23,7 +23,7 @@ test('中心页面完成重复审核、标签标注并查看风险证据，部�
  await page.getByRole('textbox',{name:'人工关键词标签',exact:true}).fill('扬言')
  await page.getByRole('textbox',{name:'标签标注理由',exact:true}).fill('根据虚构核实资料标注')
  await page.getByRole('button',{name:'保存关键词标签',exact:true}).click();await expect(page.getByText('标签已保存，关键词及风险已重新计算',{exact:true})).toBeVisible()
- await page.getByRole('textbox',{name:'筛选风险档案',exact:true}).fill(personName);await page.getByRole('button',{name:'查询档案',exact:true}).click();await page.getByRole('button',{name:'查看风险依据',exact:true}).click()
+ await page.getByRole('textbox',{name:'筛选风险档案',exact:true}).fill(personName);await page.getByRole('button',{name:'查询档案',exact:true}).click();await page.getByRole('row').filter({hasText:personName}).getByRole('button',{name:'查看风险依据',exact:true}).click()
  await expect(page.getByText('中风险',{exact:true})).toBeVisible();await expect(page.getByRole('heading',{name:`人员 #${confirmed.matched_person_id} 风险依据`})).toBeVisible()
  await expect(page.locator('mark').filter({hasText:'扬言'}).first()).toBeVisible()
  await page.screenshot({path:'test-results/risk-evidence.png',fullPage:true})

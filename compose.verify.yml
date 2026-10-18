@@ -1,0 +1,37 @@
+name: governance-verify
+services:
+  db:
+    image: mysql:8.0.46
+    environment:
+      MYSQL_DATABASE: governance_verify
+      MYSQL_USER: governance
+      MYSQL_PASSWORD: verification-database-only
+      MYSQL_ROOT_PASSWORD: verification-root-only
+      TZ: Asia/Shanghai
+    volumes:
+      - verify-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "MYSQL_PWD=$$MYSQL_PASSWORD mysql -h 127.0.0.1 -u governance governance_verify -e 'SELECT 1'"]
+      interval: 5s
+      timeout: 5s
+      retries: 40
+  api:
+    build: ./backend
+    environment:
+      DB_URL: jdbc:mysql://db:3306/governance_verify?connectionTimeZone=%2B08:00&forceConnectionTimeZoneToSession=true
+      DB_USER: governance
+      DB_PASSWORD: verification-database-only
+      DEMO_PASSWORD: Demo-Only-2026!
+      COOKIE_SECURE: "false"
+      TZ: Asia/Shanghai
+    depends_on:
+      db:
+        condition: service_healthy
+  web:
+    build: ./frontend
+    ports:
+      - "127.0.0.1::80"
+    depends_on:
+      - api
+volumes:
+  verify-data:
