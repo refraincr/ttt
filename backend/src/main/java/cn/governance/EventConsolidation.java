@@ -22,7 +22,7 @@ public class EventConsolidation {
     }
     public void attach(long recordId,long event,String decision,String actor,String reason) {
         jdbc.update("INSERT INTO tb_event_source_link(record_id,effective_event_id) VALUES (?,?)",recordId,event);
-        jdbc.update("UPDATE tb_input_record SET duplicate_review_state=?,review_status=1,version=version+1 WHERE id=?",decision,recordId);
+        jdbc.update("UPDATE tb_input_record SET duplicate_review_state=?,review_status=1,is_completed=(SELECT is_completed FROM tb_effective_event WHERE id=?),version=version+1 WHERE id=?",decision,event,recordId);
         jdbc.update("INSERT INTO tb_duplicate_decision(record_id,effective_event_id,decision,reason,actor_username) VALUES (?,?,?,?,?)",recordId,event,decision,reason,actor);
     }
     public List<Map<String,Object>> history(long recordId) {

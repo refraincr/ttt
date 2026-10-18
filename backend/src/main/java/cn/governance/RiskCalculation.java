@@ -15,7 +15,8 @@ public class RiskCalculation {
     private final JdbcTemplate jdbc;
     private final ObjectMapper json;
     private final KeywordRecognition keywords;
-    public RiskCalculation(JdbcTemplate jdbc,ObjectMapper json,KeywordRecognition keywords) { this.jdbc=jdbc;this.json=json;this.keywords=keywords; }
+    private final AlertLifecycle alerts;
+    public RiskCalculation(JdbcTemplate jdbc,ObjectMapper json,KeywordRecognition keywords,AlertLifecycle alerts) { this.jdbc=jdbc;this.json=json;this.keywords=keywords;this.alerts=alerts; }
     public List<EffectiveEvent> evidence(long personId) {
         List<EffectiveEvent> result=new ArrayList<>();
         var ids=jdbc.queryForList("SELECT id FROM tb_effective_event WHERE person_id=? ORDER BY id",Long.class,personId);
@@ -64,7 +65,9 @@ public class RiskCalculation {
         try {
             var before=jdbc.queryForList("SELECT snapshot FROM tb_person_risk WHERE person_id=?",String.class,personId);
             long history=JdbcIds.insert(jdbc,"INSERT INTO tb_risk_history(person_id,snapshot) VALUES (?,?)",personId,json.writeValueAsString(snapshot));
-            String old=before.isEmpty()?null:json.readValue(before.getFirst(),Snapshot.class).finalLevel();
+            Snapshot previous=before.isEmpty()?null:json.readValue(before.getFirst(),Snapshot.class);
+            String old=previous==null?null:previous.finalLevel();
+            alerts.changed(snapshot,previous);
             if(!Objects.equals(old,snapshot.finalLevel())) jdbc.update("INSERT INTO tb_risk_notification(person_id,before_level,after_level,history_id) VALUES (?,?,?,?)",personId,old,snapshot.finalLevel(),history);
             jdbc.update("INSERT INTO tb_person_risk(person_id,snapshot) VALUES (?,?) ON DUPLICATE KEY UPDATE snapshot=VALUES(snapshot)",personId,json.writeValueAsString(snapshot)); }
         catch(com.fasterxml.jackson.core.JsonProcessingException e) { throw new IllegalStateException("风险依据保存失败",e); }
