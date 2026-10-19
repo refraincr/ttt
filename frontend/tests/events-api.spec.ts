@@ -62,3 +62,28 @@ test('分页和字面搜索正确，非法分页参数被拒绝', async ({ reque
     expect((await request.get(`/api/events?${suffix}`)).status()).toBe(400)
   }
 })
+
+test('上传时间与部门关键词组合筛选，保持字面匹配和部门权限', async ({ request }) => {
+  await signIn(request, 'center')
+  const {setupCases,riskRecord} = await import('./cases-support')
+  const options = await setupCases(request)
+  const record = await riskRecord(request, options, {eventTime:'2001-01-01T10:00:00'})
+  await signIn(request, 'center')
+  const query = new URLSearchParams({q:record.party_name,department:'民政',from:'2000-01-01T00:00:00',to:'2099-12-31T23:59:59',size:'1'})
+  const result = await (await request.get('/api/events?'+query)).json()
+  expect(result).toMatchObject({total:1,items:[{id:record.id,departmentName:'民政局'}]})
+  query.set('to','2002-01-01T00:00:00')
+  expect(await (await request.get('/api/events?'+query)).json()).toMatchObject({total:0,items:[]})
+  query.delete('from');query.delete('to')
+  for (const department of ['公安', '%', "' OR 1=1--"]) {
+    query.set('department',department)
+    expect(await (await request.get('/api/events?'+query)).json()).toMatchObject({total:0,items:[]})
+  }
+  await signIn(request,'town');query.set('department','民政')
+  expect(await (await request.get('/api/events?'+query)).json()).toMatchObject({total:0,items:[]})
+  await signIn(request,'civil')
+  expect(await (await request.get('/api/events?'+query)).json()).toMatchObject({total:1})
+  for (const params of [{from:'invalid'},{to:'2026-13-01T00:00:00'},{from:'2026-02-01T00:00:00',to:'2026-01-01T00:00:00'},{department:'a'.repeat(101)}]) {
+    expect((await request.get('/api/events?'+new URLSearchParams(params))).status()).toBe(400)
+  }
+})

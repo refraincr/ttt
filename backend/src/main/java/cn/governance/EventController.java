@@ -48,19 +48,38 @@ public class EventController {
     public EventPage list(Authentication authentication,
                           @RequestParam(defaultValue = "1") int page,
                           @RequestParam(defaultValue = "10") int size,
-                          @RequestParam(defaultValue = "") String q) {
-        if (page < 1 || page > 1000000 || size < 1 || size > 100 || q.length() > 100) {
+                          @RequestParam(defaultValue = "") String q,
+                          @RequestParam(defaultValue = "") String department,
+                          @RequestParam(defaultValue = "") String from,
+                          @RequestParam(defaultValue = "") String to) {
+        if (page < 1 || page > 1000000 || size < 1 || size > 100 || q.length() > 100 || department.length() > 100) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "分页或搜索参数无效");
+        }
+        LocalDateTime start = null, end = null;
+        try {
+            if (!from.isBlank()) start = LocalDateTime.parse(from);
+            if (!to.isBlank()) end = LocalDateTime.parse(to);
+        } catch (java.time.format.DateTimeParseException e) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "上传时间格式无效");
+        }
+        if (start != null && end != null && start.isAfter(end)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "上传时间范围无效");
         }
         var parameters = new ArrayList<Object>();
         String where = scope(accounts.current(authentication), parameters);
+        if (!department.isBlank()) {
+            where += " AND LOCATE(?, d.name) > 0";
+            parameters.add(department.trim());
+        }
+        if (start != null) { where += " AND r.gmt_create >= ?"; parameters.add(start); }
+        if (end != null) { where += " AND r.gmt_create <= ?"; parameters.add(end); }
         if (!q.isBlank()) {
             // 使用 LOCATE 将通配符视为普通文本，查询值始终绑定参数。
             where += " AND (LOCATE(?, r.party_name) > 0 OR LOCATE(?, r.problem_description) > 0)";
             parameters.add(q.trim());
             parameters.add(q.trim());
         }
-        long total = jdbc.queryForObject("SELECT COUNT(*) FROM tb_input_record r WHERE " + where,
+        long total = jdbc.queryForObject("SELECT COUNT(*) FROM tb_input_record r JOIN tb_department d ON d.id = r.department_id WHERE " + where,
                 Long.class, parameters.toArray());
         parameters.add(size);
         parameters.add((page - 1) * size);

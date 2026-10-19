@@ -23,6 +23,8 @@ const total = ref(0)
 const page = ref(1)
 const query = ref('')
 const appliedQuery = ref('')
+const departmentQuery = ref(''), uploadedFrom = ref(''), uploadedTo = ref('')
+const appliedFilters = ref({department:'',from:'',to:''})
 const detail = ref<EventSummary | null>(null)
 const detailOpen = ref(false)
 const section = ref('events')
@@ -49,6 +51,8 @@ function clearSession() {
   page.value = 1
   query.value = ''
   appliedQuery.value = ''
+  departmentQuery.value = ''; uploadedFrom.value = ''; uploadedTo.value = ''
+  appliedFilters.value = {department:'',from:'',to:''}
   loadingEvents.value = false
 }
 
@@ -57,7 +61,8 @@ async function loadEvents() {
   loadingEvents.value = true
   error.value = ''
   try {
-    const result = await api<EventPage>(`/events?page=${page.value}&size=10&q=${encodeURIComponent(appliedQuery.value)}`)
+    const params = new URLSearchParams({page:String(page.value),size:'10',q:appliedQuery.value,...appliedFilters.value})
+    const result = await api<EventPage>('/events?'+params)
     if (version !== sessionVersion) return
     events.value = result.items
     total.value = result.total
@@ -104,7 +109,13 @@ async function openDetail(id: number) {
   }
 }
 
-function search() { appliedQuery.value = query.value.trim(); page.value = 1; void loadEvents() }
+function search() {
+  if (uploadedFrom.value && uploadedTo.value && uploadedFrom.value > uploadedTo.value) { error.value = '上传起始时间不能晚于截止时间'; return }
+  appliedQuery.value = query.value.trim()
+  appliedFilters.value = {department:departmentQuery.value.trim(),from:uploadedFrom.value||'',to:uploadedTo.value||''}
+  page.value = 1; void loadEvents()
+}
+function resetSearch() { query.value = ''; departmentQuery.value = ''; uploadedFrom.value = ''; uploadedTo.value = ''; search() }
 
 async function refreshAccount() {
   const version = sessionVersion
@@ -153,7 +164,7 @@ onMounted(async () => {
         <el-alert v-if="error" :title="error" type="error" :closable="false" show-icon />
         <el-alert v-if="!canReadEvents" title="当前账号未分配事件查看权限" description="来源事件仅向中心研判或部门上报角色开放。" type="info" :closable="false" show-icon />
         <section v-if="canReadEvents" class="event-card"><div class="card-heading"><h2>来源上报记录 <span>{{ total }}</span></h2><span class="muted">{{ account.departmentName }}</span></div>
-          <form class="filter-bar" @submit.prevent="search"><el-input v-model="query" placeholder="搜索当事人或事件描述" aria-label="搜索事件" clearable maxlength="100" /><el-button type="primary" native-type="submit" :disabled="loadingEvents">查询</el-button><el-button :disabled="loadingEvents" @click="query = ''; search()">重置</el-button></form>
+          <form class="event-filters" @submit.prevent="search"><div class="event-filter-fields"><label>当事人或描述<el-input v-model="query" placeholder="搜索当事人或事件描述" aria-label="搜索事件" clearable maxlength="100" /></label><label>上报部门<el-input v-model="departmentQuery" placeholder="输入部门关键词" aria-label="部门关键词" clearable maxlength="100" /></label><label>上传起始时间<el-date-picker v-model="uploadedFrom" type="datetime" aria-label="上传起始时间" placeholder="选择起始时间" format="YYYY-MM-DD HH:mm:ss" value-format="YYYY-MM-DDTHH:mm:ss" :editable="false" clearable /></label><label>上传截止时间<el-date-picker v-model="uploadedTo" type="datetime" aria-label="上传截止时间" placeholder="选择截止时间" format="YYYY-MM-DD HH:mm:ss" value-format="YYYY-MM-DDTHH:mm:ss" :editable="false" clearable /></label></div><div class="event-filter-actions"><span class="muted">上传时间按记录提交入库时间筛选</span><el-button type="primary" native-type="submit" :disabled="loadingEvents">查询</el-button><el-button :disabled="loadingEvents" @click="resetSearch">重置</el-button></div></form>
           <el-table v-loading="loadingEvents" :data="events" empty-text="暂无符合条件的事件" stripe>
             <el-table-column prop="id" label="编号" width="80" />
             <el-table-column prop="personName" label="当事人" min-width="110" />
