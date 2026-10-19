@@ -31,6 +31,10 @@ export interface Account {
 
 export interface EventSummary {
   id: number
+  idCard: string | null
+  phone: string | null
+  address: string | null
+  keywords: string | null
   personName: string | null
   eventTime: string
   eventCategory: string

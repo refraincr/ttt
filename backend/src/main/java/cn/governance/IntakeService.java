@@ -28,7 +28,7 @@ public class IntakeService {
     public Object departments(Authentication auth) {
         analyst(auth);return jdbc.queryForList("SELECT id,name FROM tb_department WHERE enabled=1 AND department_type='DEPARTMENT' ORDER BY id");
     }
-    public record Entry(String personName,String idCard,String phone,String eventTime,String description,Long sourceId,Long categoryId,Long disputeId,Long departmentId) {}
+    public record Entry(String personName,String idCard,String phone,String eventTime,String description,Long sourceId,Long categoryId,Long disputeId,Long departmentId,@com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_EMPTY) String address) {}
     public record Draft(long id,Entry payload,long version,Long recordId) {}
     public record Version(Long version) {}
     public record DraftWrite(Entry payload,Long version) {}
@@ -83,6 +83,8 @@ public class IntakeService {
         String name=IdentityValues.clean(e.personName()), card=IdentityValues.clean(e.idCard()).toUpperCase(Locale.ROOT), phone=IdentityValues.clean(e.phone());
         InputChecks.require(name.length()<=100 && phone.length()<=32,"身份字段过长");
         InputChecks.require(card.isEmpty() || IdentityValues.card(card),"身份证号无效");
+        String address=IdentityValues.clean(e.address());
+        InputChecks.require(address.length()<=500,"联系地址最多500字");
         String description=InputChecks.text(IdentityValues.clean(e.description()).replaceAll("\\h+"," "),10000,"问题描述");
         LocalDateTime time;
         try { time=LocalDateTime.parse(IdentityValues.clean(e.eventTime()).replace(' ','T')); } catch(Exception ex) { throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"发生时间格式无效"); }
@@ -93,7 +95,7 @@ public class IntakeService {
         var source=catalog.sourceOptions(auth).stream().filter(s->Objects.equals(s.id(),e.sourceId())).findFirst().orElseThrow(()->new ResponseStatusException(HttpStatus.BAD_REQUEST,"请选择启用的数据来源"));
         InputChecks.require(source.departmentId()==null || source.departmentId()==department,"来源与上报部门不符");
         String category=dictionary(auth,e.categoryId(),CatalogService.DictionaryKind.EVENT_CATEGORY), dispute=dictionary(auth,e.disputeId(),CatalogService.DictionaryKind.DISPUTE_TYPE);
-        long recordId=JdbcIds.insert(jdbc,"INSERT INTO tb_input_record(occurred_at,problem_description,party_name,party_id_card,party_phone,event_category,dispute_type,event_source,department_id,created_by,modified_by) VALUES (?,?,?,?,?,?,?,?,?,?,?)",time,description,name,card,phone,category,dispute,source.name(),department,actor.username(),actor.username());
+        long recordId=JdbcIds.insert(jdbc,"INSERT INTO tb_input_record(occurred_at,problem_description,party_name,party_id_card,party_phone,party_address,event_category,dispute_type,event_source,department_id,created_by,modified_by) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",time,description,name,card,phone,address,category,dispute,source.name(),department,actor.username(),actor.username());
         jdbc.update("INSERT INTO tb_record_provenance(record_id,draft_id,original_payload,source_id,category_id,dispute_id,special_report,actor_id) VALUES (?,?,?,?,?,?,?,?)",recordId,id,encode(e),source.id(),e.categoryId(),e.disputeId(),actor.roles().contains("SPECIAL_REPORTER"),actor.id());
         jdbc.update("UPDATE tb_event_draft SET record_id=?,version=version+1 WHERE id=?",recordId,id);
         matching.automatic(recordId,name,card,phone);
@@ -126,7 +128,7 @@ public class IntakeService {
     private Long nullOrPositive(Long id) { InputChecks.require(id==null || id>0,"档案编号无效");return id; }
     public List<PersonMatching.Person> people(Authentication auth,String q) { analyst(auth);return matching.people(q); }
     public Map<String,Object> person(Authentication auth,long id) {
-        analyst(auth);return Map.of("person",matching.person(id),"events",jdbc.queryForList("SELECT id,party_name,party_phone,occurred_at,problem_description,identity_review_state,duplicate_review_state,version FROM tb_input_record WHERE matched_person_id=? AND is_deleted=0 ORDER BY occurred_at DESC",id),"effectiveCount",events.count(id));
+        analyst(auth);return Map.of("person",matching.person(id),"events",jdbc.queryForList("SELECT id,party_name,party_phone,party_address,occurred_at,problem_description,identity_review_state,duplicate_review_state,version FROM tb_input_record WHERE matched_person_id=? AND is_deleted=0 ORDER BY occurred_at DESC",id),"effectiveCount",events.count(id));
     }
     public Object keywordRules(Authentication auth) { analyst(auth);return risk.activeRules().keywords(); }
     public record Tags(Long version,String tags,String reason) {}

@@ -18,7 +18,7 @@ public class EventController {
     private final JdbcTemplate jdbc;
     private final AccountService accounts;
     private static final String SELECT = """
-            SELECT r.id, r.party_name, r.occurred_at, r.event_category, r.dispute_type,
+            SELECT r.id, r.party_name, r.party_id_card, r.party_phone, r.party_address, r.keyword_tags, r.occurred_at, r.event_category, r.dispute_type,
                    r.problem_description, r.event_source, d.name AS department_name, r.is_completed
             FROM tb_input_record r JOIN tb_department d ON d.id = r.department_id
             """;
@@ -30,12 +30,12 @@ public class EventController {
 
     public record EventView(long id, String personName, LocalDateTime eventTime, String eventCategory,
                             String disputeType, String eventDescription, String eventSource,
-                            String departmentName, boolean isCompleted) {}
+                            String departmentName, boolean isCompleted, String idCard, String phone, String address, String keywords) {}
     public record EventPage(List<EventView> items, long total) {}
     private static final RowMapper<EventView> EVENT_MAPPER = (rs, row) -> new EventView(
             rs.getLong("id"), rs.getString("party_name"), rs.getObject("occurred_at", LocalDateTime.class),
             rs.getString("event_category"), rs.getString("dispute_type"), rs.getString("problem_description"),
-            rs.getString("event_source"), rs.getString("department_name"), rs.getBoolean("is_completed"));
+            rs.getString("event_source"), rs.getString("department_name"), rs.getBoolean("is_completed"), rs.getString("party_id_card"), rs.getString("party_phone"), rs.getString("party_address"), rs.getString("keyword_tags"));
 
     private String scope(AccountService.Account account, List<Object> parameters) {
         if (account.canReadAll()) return "r.is_deleted = 0";
@@ -50,9 +50,10 @@ public class EventController {
                           @RequestParam(defaultValue = "10") int size,
                           @RequestParam(defaultValue = "") String q,
                           @RequestParam(defaultValue = "") String department,
+                          @RequestParam(defaultValue = "") String keyword,
                           @RequestParam(defaultValue = "") String from,
                           @RequestParam(defaultValue = "") String to) {
-        if (page < 1 || page > 1000000 || size < 1 || size > 100 || q.length() > 100 || department.length() > 100) {
+        if (page < 1 || page > 1000000 || size < 1 || size > 100 || q.length() > 100 || department.length() > 100 || keyword.length() > 100) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "分页或搜索参数无效");
         }
         LocalDateTime start = null, end = null;
@@ -71,6 +72,7 @@ public class EventController {
             where += " AND LOCATE(?, d.name) > 0";
             parameters.add(department.trim());
         }
+        if (!keyword.isBlank()) { where += " AND LOCATE(?, COALESCE(r.keyword_tags,'')) > 0"; parameters.add(keyword.trim()); }
         if (start != null) { where += " AND r.gmt_create >= ?"; parameters.add(start); }
         if (end != null) { where += " AND r.gmt_create <= ?"; parameters.add(end); }
         if (!q.isBlank()) {

@@ -22,7 +22,7 @@ public class ArchiveChanges {
     public ArchiveChanges(JdbcTemplate jdbc,IntakeService intake,PersonMatching matching,RiskCalculation risk,ObjectMapper json,AccountService accountService) {
         this.jdbc=jdbc;this.intake=intake;this.matching=matching;this.risk=risk;this.json=json;this.accountService=accountService;
     }
-    public record Content(String personName,String idCard,String phone,String eventTime,String description) {}
+    public record Content(String personName,String idCard,String phone,String eventTime,String description,String address) {}
     public record Request(Long version,String kind,Content payload,String reason) {}
     public record Decision(boolean approve,String reason) {}
     public record Profile(Long version,String name,String idCard,String phone,String reason) {}
@@ -40,7 +40,9 @@ public class ArchiveChanges {
         LocalDateTime time;
         try {time=LocalDateTime.parse(IdentityValues.clean(c.eventTime()).replace(' ','T'));}
         catch(Exception e) {throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"发生时间格式无效");}
-        return new Content(name,card,phone,time.toString(),description);
+        String address=c.address()==null?null:IdentityValues.clean(c.address());
+        InputChecks.require(address==null||address.length()<=500,"联系地址最多500字");
+        return new Content(name,card,phone,time.toString(),description,address);
     }
     public Object requests(Authentication a) {
         var actor=intakeActor(a);
@@ -79,7 +81,7 @@ public class ArchiveChanges {
             if("DELETE".equals(change.get("kind"))) jdbc.update("UPDATE tb_input_record SET is_deleted=1,version=version+1,modified_by=? WHERE id=?",actor.username(),record);
             else {
                 var c=validate(content(change.get("payload").toString()));
-                jdbc.update("UPDATE tb_input_record SET party_name=?,party_id_card=?,party_phone=?,occurred_at=?,problem_description=?,matched_person_id=NULL,identity_review_state='PENDING',duplicate_review_state='PENDING',match_status=0,review_status=0,version=version+1,modified_by=? WHERE id=?",c.personName(),c.idCard(),c.phone(),LocalDateTime.parse(c.eventTime()),c.description(),actor.username(),record);
+                jdbc.update("UPDATE tb_input_record SET party_name=?,party_id_card=?,party_phone=?,party_address=COALESCE(?,party_address),occurred_at=?,problem_description=?,matched_person_id=NULL,identity_review_state='PENDING',duplicate_review_state='PENDING',match_status=0,review_status=0,version=version+1,modified_by=? WHERE id=?",c.personName(),c.idCard(),c.phone(),c.address(),LocalDateTime.parse(c.eventTime()),c.description(),actor.username(),record);
                 matching.automatic(record,c.personName(),c.idCard(),c.phone());
             }
             risk.recompute(oldPerson);

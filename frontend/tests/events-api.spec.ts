@@ -36,10 +36,10 @@ test('单独处置角色不能读取来源事件列表或详情', async ({ reque
   expect((await request.get('/api/events/1')).status()).toBe(403)
 })
 
-test('读取响应不暴露敏感字段和内部路径', async ({ request }) => {
+test('读取响应仅包含授权展示字段，不暴露内部路径', async ({ request }) => {
   await signIn(request, 'center')
   const detail = await (await request.get('/api/events/2')).json()
-  expect(Object.keys(detail).sort()).toEqual(['id', 'personName', 'eventTime', 'eventCategory', 'disputeType', 'eventDescription', 'eventSource', 'departmentName', 'isCompleted'].sort())
+  expect(Object.keys(detail).sort()).toEqual(['id', 'personName', 'eventTime', 'eventCategory', 'disputeType', 'eventDescription', 'eventSource', 'departmentName', 'isCompleted', 'idCard', 'phone', 'address', 'keywords'].sort())
 })
 
 test('管理员未兼任研判角色时无事件读取权限', async ({ request }) => {
