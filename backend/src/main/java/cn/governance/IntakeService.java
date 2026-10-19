@@ -164,8 +164,17 @@ public class IntakeService {
         risk.recompute(((Number)before.get("matched_person_id")).longValue());
         var after=record(auth,id);audit.record(actor,"DUPLICATE_REVIEW",id,before,Map.of("record",after,"reason",reason));return after;
     }
-    public RiskCalculation.Snapshot risk(Authentication auth,long id) {
-        analyst(auth);matching.person(id);return risk.snapshot(id);
+    public Object risk(Authentication auth,long id) {
+        analyst(auth);matching.person(id);
+        com.fasterxml.jackson.databind.node.ObjectNode result=json.valueToTree(risk.snapshot(id));
+        Map<Long,String> departments=new HashMap<>();
+        jdbc.query("SELECT id,name FROM tb_department",rs->{departments.put(rs.getLong("id"),rs.getString("name"));});
+        for(var event:result.withArray("events")) {
+            for(var source:event.withArray("sources")) {
+                ((com.fasterxml.jackson.databind.node.ObjectNode)source).put("departmentName",departments.getOrDefault(source.path("departmentId").asLong(),"未知部门"));
+            }
+        }
+        return result;
     }
     public List<DuplicateScreening.Candidate> candidates(Authentication auth,long id) { analyst(auth);record(auth,id);return duplicates.candidates(id); }
     public DuplicateScreening.Settings settings(Authentication auth) { analyst(auth);return duplicates.settings(); }
