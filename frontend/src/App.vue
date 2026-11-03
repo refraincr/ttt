@@ -2,7 +2,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { api, ApiError, type Account, type EventPage, type EventSummary } from './api'
 import InsightsWorkspace from './InsightsWorkspace.vue'
-import NavIcon from './NavIcon.vue'
+import WorkspaceNavigation from './WorkspaceNavigation.vue'
 import CaseWorkspace from './CaseWorkspace.vue'
 import ArchiveWorkspace from './ArchiveWorkspace.vue'
 import GovernanceTools from './GovernanceTools.vue'
@@ -28,6 +28,8 @@ const appliedFilters = ref({department:'',keyword:'',from:'',to:''})
 const detail = ref<EventSummary | null>(null)
 const detailOpen = ref(false)
 const section = ref('events')
+const navigationOpen = ref(false)
+function selectSection(value: string) { section.value = value; navigationOpen.value = false }
 const isAdministrator = computed(() => account.value?.roles.includes('CENTER_ADMIN'))
 let sessionVersion = 0
 let detailRequest = 0
@@ -44,6 +46,7 @@ function clearSession() {
   detailRequest++
   account.value = null
   section.value = 'events'
+  navigationOpen.value = false
   events.value = []
   total.value = 0
   detail.value = null
@@ -153,19 +156,23 @@ onMounted(async () => {
     </section>
   </main>
   <div v-else class="workspace">
-    <aside class="sidebar"><div class="brand"><span class="brand-mark">治</span><span>社会治理<br><small>分析预警工作台</small></span></div><p class="nav-label">业务工作</p><button class="nav-item" :class="{ 'nav-active': section === 'events' }" @click="section = 'events'"><NavIcon name="events" /><span>事件列表</span></button><button v-if="account.roles.includes('CENTER_ANALYST')" class="nav-item" :class="{ 'nav-active': section === 'risk' }" @click="section = 'risk'"><NavIcon name="risk" /><span>归集与风险</span></button><button v-if="canReadEvents" class="nav-item" :class="{ 'nav-active': section === 'intake' }" @click="section = 'intake'"><NavIcon name="intake" /><span>录入与身份处理</span></button><button v-if="isAdministrator" class="nav-item" :class="{ 'nav-active': section === 'accounts' }" @click="section = 'accounts'"><NavIcon name="accounts" /><span>部门与账号</span></button><button class="nav-item" :class="{ 'nav-active': section === 'catalog' }" @click="section = 'catalog'"><NavIcon name="catalog" /><span>来源与分类</span></button><button v-if="canReadEvents || isAdministrator" class="nav-item" :class="{'nav-active':section==='tools'}" @click="section='tools'"><NavIcon name="tools" /><span>规则与批量接入</span></button><button v-if="canReadEvents" class="nav-item" :class="{'nav-active':section==='archive'}" @click="section='archive'"><NavIcon name="archive" /><span>修正与归档审核</span></button><button v-if="account.roles.some(r=>['CENTER_ANALYST','DEPARTMENT_HANDLER'].includes(r))" class="nav-item" :class="{'nav-active':section==='cases'}" @click="section='cases'"><NavIcon name="cases" /><span>预警与处置</span></button><button v-if="canReadEvents || account.roles.includes('DEPARTMENT_HANDLER')" class="nav-item" :class="{'nav-active':section==='insights'}" @click="section='insights'"><NavIcon name="insights" /><span>业务概况与追溯</span></button><div class="sidebar-foot">教学演示系统<br>数据仅用于功能验证</div></aside>
+    <aside class="sidebar"><WorkspaceNavigation :account="account" :section="section" @select="selectSection" /></aside>
+    <el-drawer v-model="navigationOpen" class="navigation-drawer" title="业务导航" direction="ltr" size="272px">
+      <WorkspaceNavigation :account="account" :section="section" @select="selectSection" />
+    </el-drawer>
     <section class="main-area">
-      <header><span>工作台 <span class="separator">/</span> {{ section === 'insights' ? '业务概况与追溯' : section === 'cases' ? '预警与处置' : section === 'archive' ? '修正与归档审核' : section === 'tools' ? '规则与批量接入' : section === 'risk' ? '归集与风险' : section === 'intake' ? '录入与身份处理' : section === 'accounts' ? '部门与账号' : section === 'catalog' ? '来源与分类' : '事件列表' }}</span><div class="user-info"><span>{{ account.displayName }} <small>{{ account.departmentName }}</small></span><el-button :loading="busy" @click="signOut">退出登录</el-button></div></header>
+      <header class="workspace-header"><div class="header-location"><el-button class="navigation-toggle" aria-label="打开业务导航" :aria-expanded="navigationOpen" @click="navigationOpen = true">☰</el-button><span>工作台 <span class="separator">/</span> {{ section === 'insights' ? '业务概况与追溯' : section === 'cases' ? '预警与处置' : section === 'archive' ? '修正与归档审核' : section === 'tools' ? '规则与批量接入' : section === 'risk' ? '归集与风险' : section === 'intake' ? '录入与身份处理' : section === 'accounts' ? '部门与账号' : section === 'catalog' ? '来源与分类' : '事件列表' }}</span></div><div class="user-info"><span class="account-avatar" aria-hidden="true">{{ account.displayName.slice(0, 1) }}</span><span>{{ account.displayName }} <small>{{ account.departmentName }}</small></span><el-button :loading="busy" @click="signOut">退出登录</el-button></div></header>
       <InsightsWorkspace v-if="section==='insights'" :account="account" @expired="clearSession"/><CaseWorkspace v-else-if="section==='cases'" :key="account.id" :account="account" @expired="clearSession"/><ArchiveWorkspace v-else-if="section==='archive' && canReadEvents" :account="account" @expired="clearSession" /><GovernanceTools v-else-if="section==='tools'" :account="account" @expired="clearSession" /><RiskWorkspace v-else-if="section === 'risk' && account.roles.includes('CENTER_ANALYST')" :key="account.id" @expired="clearSession" />
       <IntakeWorkspace v-else-if="section === 'intake' && canReadEvents" :key="account.id" :account="account" @expired="clearSession" />
       <AccountManagement v-else-if="section === 'accounts' && isAdministrator" :key="account.id" @expired="clearSession" @changed="refreshAccount" />
       <CatalogManagement v-else-if="section === 'catalog'" :key="account.id" :administrator="!!isAdministrator" @expired="clearSession" />
-      <main v-else class="content"><div class="page-heading"><div><p class="eyebrow">事件管理</p><h1>事件列表</h1><p class="muted">查看来源记录与事件详情，掌握权限内的上报信息。</p></div><el-tag v-if="canReadEvents" effect="plain" size="large">{{ scope }}</el-tag></div>
+      <main v-else class="content event-workspace"><div class="page-heading"><div><p class="eyebrow">事件管理</p><h1>事件列表</h1><p class="muted">查看来源记录与事件详情，掌握权限内的上报信息。</p></div><div v-if="canReadEvents" class="page-actions"><el-tag effect="plain" size="large">{{ scope }}</el-tag><el-button :loading="loadingEvents" @click="loadEvents">刷新列表</el-button></div></div>
         <el-alert v-if="error" :title="error" type="error" :closable="false" show-icon />
         <el-alert v-if="!canReadEvents" title="当前账号未分配事件查看权限" description="来源事件仅向中心研判或部门上报角色开放。" type="info" :closable="false" show-icon />
-        <section v-if="canReadEvents" class="event-card"><div class="card-heading"><h2>来源上报记录 <span>{{ total }}</span></h2><span class="muted">{{ account.departmentName }}</span></div>
+        <section v-if="canReadEvents" class="event-card"><div class="card-heading"><div><h2>查询条件</h2><p class="muted">组合筛选，快速定位来源记录</p></div><span class="filter-caption">{{ account.departmentName }}</span></div>
           <form class="event-filters" @submit.prevent="search"><div class="event-filter-fields"><label>当事人或描述<el-input v-model="query" placeholder="搜索当事人或事件描述" aria-label="搜索事件" clearable maxlength="100" /></label><label>关键词<el-input v-model="keywordQuery" placeholder="搜索人工关键词标签" aria-label="关键词筛选" clearable maxlength="100" /></label><label>上报部门<el-input v-model="departmentQuery" placeholder="输入部门关键词" aria-label="部门关键词" clearable maxlength="100" /></label><label>上传起始时间<el-date-picker v-model="uploadedFrom" type="datetime" aria-label="上传起始时间" placeholder="选择起始时间" format="YYYY-MM-DD HH:mm:ss" value-format="YYYY-MM-DDTHH:mm:ss" :editable="false" clearable /></label><label>上传截止时间<el-date-picker v-model="uploadedTo" type="datetime" aria-label="上传截止时间" placeholder="选择截止时间" format="YYYY-MM-DD HH:mm:ss" value-format="YYYY-MM-DDTHH:mm:ss" :editable="false" clearable /></label></div><div class="event-filter-actions"><span class="muted">上传时间按记录提交入库时间筛选</span><el-button type="primary" native-type="submit" :disabled="loadingEvents">查询</el-button><el-button :disabled="loadingEvents" @click="resetSearch">重置</el-button></div></form>
-          <el-table v-loading="loadingEvents" :data="events" empty-text="暂无符合条件的事件" stripe>
+          <div class="event-results-heading"><h2>来源上报记录 <span>{{ total }} 条</span></h2><span class="muted" role="status">{{ loadingEvents ? '正在加载记录…' : '每页 10 条' }}</span></div>
+          <el-table v-loading="loadingEvents" :data="events" empty-text="暂无符合条件的事件" :aria-busy="loadingEvents">
             <el-table-column prop="id" label="编号" width="80" />
             <el-table-column prop="personName" label="当事人" min-width="110" />
             <el-table-column prop="idCard" label="当事人身份证号" min-width="190" show-overflow-tooltip />
@@ -183,16 +190,26 @@ onMounted(async () => {
         </section><p class="data-note">权限范围由账号确定。事件办结状态与人员风险等级分别管理。</p>
       </main>
     </section>
-    <el-drawer v-model="detailOpen" title="事件详情" size="min(580px, 100vw)">
-      <template v-if="detail"><el-tag effect="plain">来源记录 #{{ detail.id }}</el-tag><h2>{{ detail.personName }}</h2><el-descriptions :column="1" border>
-        <el-descriptions-item label="当事人身份证号">{{detail.idCard||'未填写'}}</el-descriptions-item><el-descriptions-item label="当事人电话">{{detail.phone||'未填写'}}</el-descriptions-item><el-descriptions-item label="联系地址">{{detail.address||'未填写'}}</el-descriptions-item><el-descriptions-item label="关键词">{{detail.keywords||'未标注'}}</el-descriptions-item>
-        <el-descriptions-item label="上报部门">{{ detail.departmentName }}</el-descriptions-item>
-        <el-descriptions-item label="数据来源">{{ detail.eventSource }}</el-descriptions-item>
-        <el-descriptions-item label="发生时间">{{ detail.eventTime.replace('T', ' ') }}</el-descriptions-item>
-        <el-descriptions-item label="事件类别">{{ detail.eventCategory }}</el-descriptions-item>
-        <el-descriptions-item label="纠纷类型">{{ detail.disputeType }}</el-descriptions-item>
-        <el-descriptions-item label="办理状态">{{ detail.isCompleted ? '已办结' : '未办结' }}</el-descriptions-item>
-      </el-descriptions><h3>问题描述</h3><p class="description">{{ detail.eventDescription }}</p></template>
+    <el-drawer v-model="detailOpen" class="event-detail-drawer" title="事件详情" size="min(620px, 100vw)">
+      <template v-if="detail">
+        <div class="detail-summary"><div><p class="eyebrow">来源记录 #{{ detail.id }}</p><h2>{{ detail.personName || '未填写姓名' }}</h2><p class="muted">{{ detail.departmentName }}</p></div><el-tag :type="detail.isCompleted ? 'success' : 'info'">{{ detail.isCompleted ? '已办结' : '未办结' }}</el-tag></div>
+        <section class="detail-section"><h3>当事人信息</h3><el-descriptions :column="1" border>
+          <el-descriptions-item label="当事人身份证号">{{ detail.idCard || '未填写' }}</el-descriptions-item>
+          <el-descriptions-item label="当事人电话">{{ detail.phone || '未填写' }}</el-descriptions-item>
+          <el-descriptions-item label="联系地址">{{ detail.address || '未填写' }}</el-descriptions-item>
+        </el-descriptions></section>
+        <section class="detail-section"><h3>事件信息</h3><el-descriptions :column="1" border>
+          <el-descriptions-item label="关键词">{{ detail.keywords || '未标注' }}</el-descriptions-item>
+          <el-descriptions-item label="上报部门">{{ detail.departmentName }}</el-descriptions-item>
+          <el-descriptions-item label="数据来源">{{ detail.eventSource }}</el-descriptions-item>
+          <el-descriptions-item label="发生时间">{{ detail.eventTime.replace('T', ' ') }}</el-descriptions-item>
+          <el-descriptions-item label="事件类别">{{ detail.eventCategory }}</el-descriptions-item>
+          <el-descriptions-item label="纠纷类型">{{ detail.disputeType }}</el-descriptions-item>
+          <el-descriptions-item label="办理状态">{{ detail.isCompleted ? '已办结' : '未办结' }}</el-descriptions-item>
+        </el-descriptions></section>
+        <section class="detail-section"><h3>问题描述</h3><p class="description">{{ detail.eventDescription }}</p></section>
+      </template>
+      <template #footer><el-button @click="detailOpen = false">关闭详情</el-button></template>
     </el-drawer>
   </div>
 </template>

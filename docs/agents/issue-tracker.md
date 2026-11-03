@@ -4,7 +4,7 @@
 
 ## 约定
 
-- 功能目录：`.scratch/social-governance-risk/`，索引为其中的 `README.md`。
+- 功能按目录独立跟踪，索引为各目录中的 `README.md`：既有业务交付位于 `.scratch/social-governance-risk/`；已确认的 12 项 UI 美化任务位于 `.scratch/ui-refresh/`。
 - 一项任务一个文件，保存在 `issues/<NN>-<slug>.md`，编号从 01 起，前置任务先编号。
 - 来源规格保留在文档目录，以索引中的链接访问，不复制出第二份权威规格、不改写父规格。
 - 任务使用 `What to build`、`Blocked by`、`Status` 及验收标准；Blocked by 列出直接前置的编号与标题。
