@@ -5,5 +5,6 @@ import 'element-plus/dist/index.css'
 import App from './App.vue'
 import './style.css'
 import './workspace.css'
+import './login.css'
 
 createApp(App).use(ElementPlus, { locale: zhCn }).mount('#app')

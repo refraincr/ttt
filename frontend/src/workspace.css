@@ -1,5 +1,5 @@
 /* Incremental workspace theme: reusable tokens; page rules stay under event-workspace. */
-.workspace {
+.workspace, .login-layout {
   --workspace-primary: #246c5b;
   --workspace-ink: #243c35;
   --workspace-muted: #687c75;

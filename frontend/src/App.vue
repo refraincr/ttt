@@ -75,6 +75,7 @@ async function loadEvents() {
 }
 
 async function signIn() {
+  if (busy.value) return
   if (!username.value.trim() || !password.value) { error.value = '请输入账号和密码'; return }
   busy.value = true
   error.value = ''
@@ -140,19 +141,24 @@ onMounted(async () => {
   <main v-else-if="!account" class="login-layout">
     <section class="login-intro">
       <div class="brand"><span class="brand-mark">治</span> 社会治理数据平台</div>
-      <div><p class="eyebrow">社会治理 · 协同共治</p><h1>让每一条线索<br>都有清晰的来路。</h1><p class="intro-copy">归集部门事件，连接基层工作。<br>从一份可靠的记录开始。</p></div>
+      <div class="login-story"><p class="eyebrow">社会治理 · 协同共治</p><h1>让每一条线索<br>都有清晰的来路。</h1><p class="intro-copy">归集部门事件，连接基层工作。<br>从一份可靠的记录开始。</p>
+        <div class="login-capabilities"><div><span>01</span><p>多源归集<small>连接部门上报与来源记录</small></p></div><div><span>02</span><p>协同处置<small>贯通风险研判与跟进反馈</small></p></div></div>
+      </div>
       <span class="intro-foot">社会治理数据分析与风险预警系统</span>
     </section>
     <section class="login-panel">
-      <div class="login-form"><p class="eyebrow">工作台登录</p><h2>欢迎回来</h2><p class="muted">请使用已分配的工作账号登录</p>
+      <div class="login-form"><div class="login-access-label"><span aria-hidden="true"></span>统一工作入口</div><p class="eyebrow">工作台登录</p><h2>欢迎回来</h2><p class="muted" id="login-guidance">请使用已分配的工作账号登录</p>
         <el-alert v-if="error" :title="error" type="error" :closable="false" show-icon />
-        <el-form label-position="top" @submit.prevent="signIn">
-          <el-form-item label="账号"><el-input v-model="username" autocomplete="username" placeholder="请输入工作账号" aria-label="账号" size="large" /></el-form-item>
-          <el-form-item label="密码"><el-input v-model="password" type="password" autocomplete="current-password" placeholder="请输入密码" aria-label="密码" show-password size="large" /></el-form-item>
-          <el-button type="primary" native-type="submit" :loading="busy" size="large" class="login-button">登录</el-button>
+        <el-form label-position="top" aria-label="工作台登录" aria-describedby="login-guidance" :aria-busy="busy" @submit.prevent="signIn">
+          <el-form-item label="账号" for="login-username"><el-input id="login-username" v-model="username" :disabled="busy" autocomplete="username" placeholder="请输入工作账号" aria-label="账号" size="large" /></el-form-item>
+          <el-form-item label="密码" for="login-password"><el-input id="login-password" v-model="password" :disabled="busy" type="password" autocomplete="current-password" placeholder="请输入密码" aria-label="密码" show-password size="large" /></el-form-item>
+          <el-button type="primary" native-type="submit" :loading="busy" size="large" class="login-button">{{ busy ? '正在登录…' : '登录' }}</el-button>
+          <p v-if="busy" class="login-progress" role="status">正在验证身份，请稍候…</p>
         </el-form>
-        <p class="login-note">仅展示当前账号权限内的数据<br>教学演示环境 · 使用虚构样例数据</p>
+        <p class="login-permission">登录后仅展示当前账号权限内的数据</p>
+        <div class="login-note"><span class="login-demo-label">教学演示环境</span><p>本环境使用虚构样例数据，用于业务流程演示。</p></div>
       </div>
+      <p class="login-panel-footer">规范记录 · 协同办理 · 全程可溯</p>
     </section>
   </main>
   <div v-else class="workspace">
