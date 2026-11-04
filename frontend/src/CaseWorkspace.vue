@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import {computed,onMounted,ref} from 'vue'
+import './cases.css'
 import {api,ApiError,type Account} from './api'
 const props=defineProps<{account:Account}>()
 const emit=defineEmits<{expired:[]}>()
@@ -16,12 +17,13 @@ const conclusion=ref(''),taskState=ref(''),progressText=ref(''),reviewReason=ref
 const dispatch=ref({title:'',instruction:'',summary:'',contact:'',deadline:'',departmentId:undefined as number|undefined,eventIds:[] as number[]})
 const dispatchFiles=ref<{id:number;fileName:string}[]>([]),progressFiles=ref<{id:number;fileName:string}[]>([])
 const stateNames:Record<string,string>={OPEN:'开放',CLOSED:'已关闭',ASSIGNED:'部门处理中',RETURNED:'退回补充',SUBMITTED:'中心待审核'}
-const actionNames:Record<string,string>={ASSESS:'研判',CLOSE:'关闭',DISPATCH:'派发',PROGRESS:'跟进',SUBMIT:'提交结果',RETURN:'退回补充'}
+const actionNames:Record<string,string>={ASSESS:'研判',CLOSE:'关闭',CONFIRM:'确认归档与授权',DISPATCH:'派发',PROGRESS:'跟进',SUBMIT:'提交结果',RETURN:'退回补充'}
 const levels:Record<string,string>={LOW:'低',MEDIUM:'中',HIGH:'高'}
 function decoded(s:any){if(typeof s!=='string')return s||{};try{return JSON.parse(s)}catch{return {}}}
 const addedIds=computed(()=>{const a=selectedAlert.value;if(!a)return [];const last=a.reviews.at(-1);const previous=decoded(last?.snapshot).events||[];return a.snapshot.events.filter((e:any)=>!previous.some((p:any)=>p.id===e.id)).map((e:any)=>e.id)})
 async function run(action:()=>Promise<void>){if(busy.value)return;busy.value=true;error.value='';message.value='';try{await action()}catch(e){error.value=e instanceof Error?e.message:'操作失败';if(e instanceof ApiError&&e.status===401)emit('expired')}finally{busy.value=false}}
 function write<T=any>(path:string,body:unknown,method='POST'){return api<T>(path,{method,headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})}
+function resetFilters(){filters.value={level:'',name:'',keyword:'',source:'',departmentId:undefined,from:'',to:'',state:'OPEN',backlog:false};page.value=1;run(loadAlerts)}
 async function loadAlerts(){const p=new URLSearchParams({page:String(page.value),size:'20'});for(const [k,v] of Object.entries(filters.value))if(v!==undefined && v!=='')p.set(k,String(v));const data=await api<any>('/cases/alerts?'+p);alerts.value=data.items;total.value=data.total}
 async function loadTasks(){const data=await api<any>('/cases/tasks?state='+taskState.value+'&page='+taskPage.value+'&size=20');tasks.value=data.items;taskTotal.value=data.total}
 async function openAlert(id:number){selectedAlert.value=await api<any>('/cases/alerts/'+id);conclusion.value='';dispatchFiles.value=[];dispatch.value={title:'',instruction:'',summary:'',contact:'',deadline:'',departmentId:undefined,eventIds:[]}}
@@ -35,34 +37,353 @@ async function upload(event:Event,stage:'dispatch'|'progress'){const input=event
 onMounted(()=>run(async()=>{await loadTasks();if(analyst.value){await loadAlerts();settings.value=await api('/cases/settings');departments.value=await api<any[]>('/intake/departments')}}))
 </script>
 <template>
-<main class="content case-workspace"><div class="page-heading"><div><p class="eyebrow">研判 · 协同处置</p><h1>预警与处置</h1><p class="muted">跟踪风险依据，明确派发事项，保留每轮处置结果。</p></div></div>
-<el-alert v-if="error" :title="error" type="error" :closable="false"/><el-alert v-if="message" :title="message" type="success" :closable="false"/>
-<el-tabs v-model="tab"><el-tab-pane v-if="analyst" label="风险预警" name="alerts"><section class="event-card"><h2>预警筛选与积压提醒</h2>
-<el-form label-position="top" class="case-filters" @submit.prevent="page=1;run(loadAlerts)">
-<el-form-item label="风险等级"><el-select v-model="filters.level" clearable><el-option v-for="(label,value) in levels" :key="value" :label="label" :value="value"/></el-select></el-form-item>
-<el-form-item label="姓名"><el-input v-model="filters.name" aria-label="预警姓名"/></el-form-item><el-form-item label="关键词"><el-input v-model="filters.keyword"/></el-form-item><el-form-item label="来源"><el-input v-model="filters.source"/></el-form-item>
-<el-form-item label="来源部门"><el-select v-model="filters.departmentId" clearable><el-option v-for="d in departments" :key="d.id" :label="d.name" :value="d.id"/></el-select></el-form-item>
-<el-form-item label="生成时间起"><el-date-picker v-model="filters.from" type="datetime" value-format="YYYY-MM-DDTHH:mm:ss"/></el-form-item><el-form-item label="生成时间止"><el-date-picker v-model="filters.to" type="datetime" value-format="YYYY-MM-DDTHH:mm:ss"/></el-form-item>
-<el-form-item label="预警状态"><el-select v-model="filters.state" clearable><el-option label="开放" value="OPEN"/><el-option label="已关闭" value="CLOSED"/></el-select></el-form-item><el-form-item><el-checkbox v-model="filters.backlog">仅看未研判积压</el-checkbox></el-form-item><el-button native-type="submit" type="primary" :disabled="busy">查询预警</el-button></el-form>
-<div class="filter-bar"><span>未研判提醒阈值（天）</span><el-input-number v-model="settings.backlogDays" :min="1" :max="365" aria-label="提醒天数"/><el-button :disabled="busy" @click="saveSettings">保存提醒阈值</el-button><span class="muted">从预警生成时间起算，已研判或已关闭不列入积压。</span></div>
-<el-table :data="alerts"><el-table-column prop="id" label="编号" width="80"/><el-table-column prop="name" label="姓名"/><el-table-column label="等级"><template #default="{row}">{{levels[row.level]}}</template></el-table-column><el-table-column label="状态"><template #default="{row}">{{stateNames[row.state]}}</template></el-table-column><el-table-column label="提醒"><template #default="{row}"><el-tag v-if="row.new_basis">新增依据</el-tag><el-tag v-if="row.backlog" type="warning">未研判积压</el-tag></template></el-table-column><el-table-column prop="created_at" label="生成时间"/><el-table-column label="操作"><template #default="{row}"><el-button :disabled="busy" @click="run(()=>openAlert(row.id))">查看预警</el-button></template></el-table-column></el-table><el-pagination v-model:current-page="page" :total="total" :page-size="20" layout="total, prev, pager, next" @current-change="run(loadAlerts)"/>
-</section>
-<section v-if="selectedAlert" class="event-card"><h2>预警 #{{selectedAlert.id}} · {{selectedAlert.name}}</h2><p>预警等级：{{levels[selectedAlert.level]}} · 当前风险：{{levels[selectedAlert.current.finalLevel]}} · {{stateNames[selectedAlert.state]}}</p><p v-if="selectedAlert.new_basis" class="muted">有新增依据；下表标记相对最近研判新增的有效事件。已有事件的文本或规则变化也会更新依据。</p>
-<h3>本次预警依据</h3><el-table :data="selectedAlert.snapshot.events"><el-table-column label="有效事件"><template #default="{row}">#{{row.id}} <el-tag v-if="addedIds.includes(row.id)">新增事件</el-tag></template></el-table-column><el-table-column prop="eventTime" label="发生时间"/><el-table-column label="来源内容"><template #default="{row}"><p v-for="s in row.sources" :key="s.recordId">{{s.source}} · {{s.description}} <el-tag v-if="s.specialReport">特殊来源</el-tag><span v-if="s.tags">标签：{{s.tags}}</span></p></template></el-table-column></el-table>
-<p v-for="hit in selectedAlert.snapshot.keywordHits" :key="`${hit.eventId}-${hit.ruleId}`">关键词：{{hit.ruleName}} · 事件 #{{hit.eventId}} · 规则版本 {{hit.ruleVersion}}<span v-for="(e,i) in hit.evidence" :key="i">；命中「{{e.term}}」：{{e.text}}</span></p>
-<template v-if="selectedAlert.state==='OPEN'"><el-input v-model="conclusion" type="textarea" aria-label="研判结论" placeholder="必填：研判结论；暂不派发时说明原因" maxlength="2000"/><el-button :disabled="busy" @click="assess(false)">记录研判</el-button><el-button :disabled="busy" @click="assess(true)">填写结论并关闭预警</el-button>
-<h3>派发单部门任务</h3><el-form label-position="top"><el-form-item label="任务标题"><el-input v-model="dispatch.title"/></el-form-item><el-form-item label="关联有效事件（当前归档）"><el-checkbox-group v-model="dispatch.eventIds"><el-checkbox v-for="e in selectedAlert.current.events" :key="e.id" :value="e.id">#{{e.id}} {{e.eventTime}}</el-checkbox></el-checkbox-group></el-form-item><el-form-item label="承办部门"><el-select v-model="dispatch.departmentId"><el-option v-for="d in departments" :key="d.id" :label="d.name" :value="d.id"/></el-select></el-form-item><el-form-item label="处置期限"><el-date-picker v-model="dispatch.deadline" type="datetime" value-format="YYYY-MM-DDTHH:mm:ss"/></el-form-item><el-form-item label="处置说明"><el-input v-model="dispatch.instruction" type="textarea"/></el-form-item><el-form-item label="授权联系方式"><el-input v-model="dispatch.contact" placeholder="仅填写承办部门必要联系方式，可留空"/></el-form-item><el-form-item label="授权摘要"><el-input v-model="dispatch.summary" type="textarea" placeholder="仅分享需承办部门知悉的内容，可留空"/></el-form-item><el-form-item label="授权附件"><input type="file" aria-label="上传授权附件" :disabled="busy" @change="upload($event,'dispatch')"/><div v-for="f in dispatchFiles" :key="f.id">{{f.fileName}}<el-button link @click="dispatchFiles=dispatchFiles.filter(x=>x.id!==f.id)">移除选择</el-button></div></el-form-item><el-button :disabled="busy" type="primary" @click="dispatchTask">派发任务</el-button></el-form></template>
-<h3>研判历史</h3><el-table :data="selectedAlert.reviews"><el-table-column label="操作"><template #default="{row}">{{actionNames[row.action]}}</template></el-table-column><el-table-column prop="conclusion" label="结论"/><el-table-column prop="actor" label="研判人"/><el-table-column prop="created_at" label="时间"/></el-table></section>
-</el-tab-pane>
-<el-tab-pane label="处置任务" name="tasks"><section class="event-card"><h2>{{analyst?'派发与审核':'本部门处置任务'}}</h2><div class="filter-bar"><el-select v-model="taskState" clearable aria-label="任务阶段"><el-option v-for="s in ['ASSIGNED','RETURNED','SUBMITTED','CLOSED']" :key="s" :label="stateNames[s]" :value="s"/></el-select><el-button :disabled="busy" @click="taskPage=1;run(loadTasks)">刷新任务</el-button></div><el-table :data="tasks"><el-table-column prop="id" label="任务编号"/><el-table-column prop="title" label="任务标题"/><el-table-column prop="department_name" label="承办部门"/><el-table-column label="阶段"><template #default="{row}">{{stateNames[row.state]}}</template></el-table-column><el-table-column prop="deadline" label="期限"/><el-table-column label="计时与归档"><template #default="{row}">{{row.archive_pending?'待确认':row.departmentOverdue?'部门逾期':''}} 中心待审 {{row.reviewWaitSeconds}} 秒</template></el-table-column><el-table-column prop="submitted_at" label="中心待审起点"/><el-table-column label="操作"><template #default="{row}"><el-button :disabled="busy" @click="run(()=>openTask(row.id))">查看任务</el-button></template></el-table-column></el-table><el-pagination v-model:current-page="taskPage" :total="taskTotal" :page-size="20" layout="total, prev, pager, next" @current-change="run(loadTasks)"/></section>
-<section v-if="selectedTask" class="event-card"><h2>任务 #{{selectedTask.id}} · {{selectedTask.title}}</h2><el-descriptions :column="1" border><el-descriptions-item label="阶段">{{stateNames[selectedTask.state]}}</el-descriptions-item><el-descriptions-item label="承办部门">{{selectedTask.department_name}}</el-descriptions-item><el-descriptions-item label="期限">{{selectedTask.deadline}}</el-descriptions-item><el-descriptions-item label="中心待审起点">{{selectedTask.submitted_at||'尚未进入待审 / 已结束本轮待审'}}</el-descriptions-item><el-descriptions-item label="处置说明">{{selectedTask.instruction}}</el-descriptions-item><el-descriptions-item label="授权联系方式">{{selectedTask.contact||'未授权'}}</el-descriptions-item><el-descriptions-item label="授权摘要">{{selectedTask.summary||'未授权'}}</el-descriptions-item><el-descriptions-item label="关联事件">{{selectedTask.events.map((id:number)=>'#'+id).join('、')}}</el-descriptions-item></el-descriptions>
-<el-alert v-if="selectedTask.archive_pending" title="归档变化，任务暂停，等待中心确认" type="warning" :closable="false"/><template v-if="analyst && selectedTask.archive_pending"><el-input-number v-model="confirmPerson" aria-label="确认人员编号"/><el-input v-model="confirmEvents" placeholder="确认有效事件编号，英文逗号分隔"/><el-input v-model="selectedTask.instruction" placeholder="确认授权说明"/><el-input v-model="selectedTask.contact" placeholder="确认授权联系方式"/><el-input v-model="selectedTask.summary" placeholder="确认授权摘要"/><el-input v-model="confirmReason" placeholder="必填确认理由"/><el-button @click="confirmArchive">确认归档与授权并恢复</el-button></template><p>部门逾期：{{selectedTask.departmentOverdue?'是':'否'}} · 中心待审：{{selectedTask.reviewWaitSeconds}} 秒</p><h3>派发时授权快照</h3><p>{{selectedTask.dispatch_snapshot.title}} · {{selectedTask.dispatch_snapshot.departmentName}} · {{selectedTask.dispatch_snapshot.deadline}}</p><p>{{selectedTask.dispatch_snapshot.instruction}}</p><p>联系方式：{{selectedTask.dispatch_snapshot.contact||'未授权'}}；摘要：{{selectedTask.dispatch_snapshot.summary||'未授权'}}</p>
-<h3>任务附件</h3><p v-if="!selectedTask.attachments.length" class="muted">暂无授权附件</p><p v-for="f in selectedTask.attachments" :key="f.id"><a :href="`/api/cases/attachments/${f.id}`">{{f.file_name}}</a> · {{f.stage==='DISPATCH'?'派发授权':'部门跟进'}} · {{f.owner_username}} <span v-if="f.note_id">（记录 #{{f.note_id}}）</span></p>
-<template v-if="handler && selectedTask.department_id===account.departmentId && ['ASSIGNED','RETURNED'].includes(selectedTask.state)"><h3>部门跟进与结果</h3><el-input v-model="progressText" type="textarea" aria-label="跟进或处理结果" placeholder="填写跟进进展或提交的处理结果"/><input type="file" aria-label="上传跟进附件" :disabled="busy" @change="upload($event,'progress')"/><div v-for="f in progressFiles" :key="f.id">{{f.fileName}}<el-button link @click="progressFiles=progressFiles.filter(x=>x.id!==f.id)">移除选择</el-button></div><el-button :disabled="busy" @click="progress(false)">保存跟进</el-button><el-button :disabled="busy" type="primary" @click="progress(true)">提交处理结果</el-button></template>
-<template v-if="analyst && selectedTask.state==='SUBMITTED'"><h3>中心审核</h3><el-input v-model="reviewReason" type="textarea" aria-label="任务审核理由" placeholder="必填：审核结论或补充要求"/><p>明确选择需要办结的关联事件；不选则只关闭任务。</p><el-checkbox-group v-model="completeIds"><el-checkbox v-for="id in selectedTask.events" :key="id" :value="id">办结事件 #{{id}}</el-checkbox></el-checkbox-group><el-button :disabled="busy" @click="reviewTask('RETURN')">退回补充</el-button><el-button :disabled="busy" type="primary" @click="reviewTask('CLOSE')">通过并关闭任务</el-button></template>
-<h3>跟进、提交与审核历史</h3><el-table :data="selectedTask.history"><el-table-column prop="id" label="记录"/><el-table-column label="操作"><template #default="{row}">{{actionNames[row.action]}}</template></el-table-column><el-table-column prop="content" label="内容"/><el-table-column prop="actor" label="操作者"/><el-table-column prop="created_at" label="时间"/><el-table-column label="明确办结事件"><template #default="{row}">{{decoded(row.completed_events).join('、')}}</template></el-table-column></el-table><p class="muted">任务关闭和事件办结不降低累计风险；风险预警由中心另行研判并关闭。</p></section>
-</el-tab-pane></el-tabs></main>
+<main class="content case-workspace" :aria-busy="busy">
+<div class="page-heading">
+<div>
+<p class="eyebrow">研判 · 协同处置</p>
+<h1>预警与处置</h1>
+<p class="muted">跟踪风险依据，明确派发事项，保留每轮处置结果。</p>
+</div>
+<div class="case-role">
+<span>
+</span>{{analyst?'中心研判 · 派发与审核':'部门承办 · 授权范围内处置'}}</div>
+</div>
+<div class="case-guide">
+<div>
+<b>01</b>
+<p>{{analyst?'核对风险依据':'查看授权事项'}}<small>{{analyst?'识别新增依据与未研判积压':'仅查看本部门获授权的内容'}}</small>
+</p>
+</div>
+<div>
+<b>02</b>
+<p>{{analyst?'研判与派发':'跟进与反馈'}}<small>{{analyst?'明确事项、部门与处置期限':'记录进展，提交处理结果'}}</small>
+</p>
+</div>
+<div>
+<b>03</b>
+<p>{{analyst?'审核与留痕':'追踪处置结果'}}<small>{{analyst?'按需办结事件，保留完整历史':'查看退回要求与审核记录'}}</small>
+</p>
+</div>
+</div>
+<p v-if="busy" class="case-loading" role="status">正在读取或保存，请稍候…</p>
+<el-alert v-if="error" :title="error" type="error" :closable="false"/>
+<el-alert v-if="message" :title="message" type="success" :closable="false"/>
+<el-tabs v-model="tab" class="case-tabs">
+<el-tab-pane v-if="analyst" label="风险预警" name="alerts">
+<section class="event-card">
+<div class="case-card-heading">
+<div>
+<h2>预警筛选与积压提醒</h2>
+<p>按风险、来源与生成时间定位预警，积压提醒仅统计未研判的开放预警。</p>
+</div>
+<span class="case-count">共 {{total}} 条</span>
+</div>
+<el-form label-position="top" :disabled="busy" class="case-filters" @submit.prevent="page=1;run(loadAlerts)">
+<el-form-item label="风险等级">
+<el-select v-model="filters.level" clearable>
+<el-option v-for="(label,value) in levels" :key="value" :label="label" :value="value"/>
+</el-select>
+</el-form-item>
+<el-form-item label="姓名">
+<el-input v-model="filters.name" aria-label="预警姓名"/>
+</el-form-item>
+<el-form-item label="关键词">
+<el-input v-model="filters.keyword"/>
+</el-form-item>
+<el-form-item label="来源">
+<el-input v-model="filters.source"/>
+</el-form-item>
+<el-form-item label="来源部门">
+<el-select v-model="filters.departmentId" clearable>
+<el-option v-for="d in departments" :key="d.id" :label="d.name" :value="d.id"/>
+</el-select>
+</el-form-item>
+<el-form-item label="生成时间起">
+<el-date-picker v-model="filters.from" type="datetime" value-format="YYYY-MM-DDTHH:mm:ss"/>
+</el-form-item>
+<el-form-item label="生成时间止">
+<el-date-picker v-model="filters.to" type="datetime" value-format="YYYY-MM-DDTHH:mm:ss"/>
+</el-form-item>
+<el-form-item label="预警状态">
+<el-select v-model="filters.state" clearable>
+<el-option label="开放" value="OPEN"/>
+<el-option label="已关闭" value="CLOSED"/>
+</el-select>
+</el-form-item>
+<el-form-item class="case-backlog">
+<el-checkbox v-model="filters.backlog">仅看未研判积压</el-checkbox>
+</el-form-item>
+<div class="case-actions">
+<el-button native-type="submit" type="primary" :disabled="busy">查询预警</el-button>
+<el-button :disabled="busy" @click="resetFilters">重置筛选</el-button>
+</div>
+</el-form>
+<div class="case-settings">
+<span>未研判提醒阈值（天）</span>
+<el-input-number v-model="settings.backlogDays" :disabled="busy" :min="1" :max="365" aria-label="提醒天数"/>
+<el-button :disabled="busy" @click="saveSettings">保存提醒阈值</el-button>
+<span class="muted">从预警生成时间起算，已研判或已关闭不列入积压。</span>
+</div>
+<div class="case-list-heading">
+<h3>风险预警列表</h3>
+<span>风险等级与预警状态分别展示</span>
+</div>
+<el-table :data="alerts" empty-text="暂无符合条件的预警">
+<el-table-column prop="id" label="编号" width="80"/>
+<el-table-column prop="name" label="姓名" min-width="130"/>
+<el-table-column label="风险等级" width="110">
+<template #default="{row}">
+<el-tag :type="row.level==='HIGH'?'danger':row.level==='MEDIUM'?'warning':'success'" effect="light">{{levels[row.level]}}风险</el-tag>
 </template>
-<style scoped>
-.case-filters{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;align-items:end}.case-workspace .event-card{padding:24px;margin-bottom:20px}.case-workspace h3{margin-top:26px}.case-workspace .el-alert{margin-bottom:14px}.case-workspace .el-textarea{margin-bottom:12px}.case-workspace p{overflow-wrap:anywhere}.case-workspace .el-select{min-width:160px}.case-workspace input[type=file]{max-width:100%;margin:12px 0}
-</style>
+</el-table-column>
+<el-table-column label="预警状态" width="110">
+<template #default="{row}">
+<el-tag :type="row.state==='CLOSED'?'info':'primary'">{{stateNames[row.state]}}</el-tag>
+</template>
+</el-table-column>
+<el-table-column label="提醒" min-width="210">
+<template #default="{row}">
+<el-tag v-if="row.new_basis">新增依据</el-tag>
+<el-tag v-if="row.backlog" type="warning">未研判积压</el-tag>
+</template>
+</el-table-column>
+<el-table-column prop="created_at" label="生成时间" min-width="185"/>
+<el-table-column label="操作" width="120">
+<template #default="{row}">
+<el-button :disabled="busy" @click="run(()=>openAlert(row.id))">查看预警</el-button>
+</template>
+</el-table-column>
+</el-table>
+<el-pagination class="case-pagination" :disabled="busy" v-model:current-page="page" :total="total" :page-size="20" layout="total, prev, pager, next" @current-change="run(loadAlerts)"/>
+</section>
+<section v-if="selectedAlert" class="event-card case-detail">
+<div class="case-card-heading">
+<div>
+<p class="eyebrow">预警详情 / #{{selectedAlert.id}}</p>
+<h2>预警 #{{selectedAlert.id}} · {{selectedAlert.name}}</h2>
+</div>
+<el-tag :type="selectedAlert.state==='CLOSED'?'info':'primary'">{{stateNames[selectedAlert.state]}}</el-tag>
+</div>
+<div class="case-summary">
+<span>预警等级<strong>{{levels[selectedAlert.level]}}风险</strong>
+</span>
+<span>当前风险<strong>{{levels[selectedAlert.current.finalLevel]}}风险</strong>
+</span>
+<span>依据事件<strong>{{selectedAlert.snapshot.events.length}} 项</strong>
+</span>
+</div>
+<p v-if="selectedAlert.new_basis" class="muted">有新增依据；下表标记相对最近研判新增的有效事件。已有事件的文本或规则变化也会更新依据。</p>
+<h3>本次预警依据</h3>
+<el-table :data="selectedAlert.snapshot.events" empty-text="暂无预警依据">
+<el-table-column label="有效事件" width="145">
+<template #default="{row}">#{{row.id}} <el-tag v-if="addedIds.includes(row.id)">新增事件</el-tag>
+</template>
+</el-table-column>
+<el-table-column prop="eventTime" label="发生时间" min-width="180"/>
+<el-table-column label="来源内容" min-width="320">
+<template #default="{row}">
+<p v-for="s in row.sources" :key="s.recordId">{{s.source}} · {{s.description}} <el-tag v-if="s.specialReport">特殊来源</el-tag>
+<span v-if="s.tags">标签：{{s.tags}}</span>
+</p>
+</template>
+</el-table-column>
+</el-table>
+<p class="case-evidence" v-for="hit in selectedAlert.snapshot.keywordHits" :key="`${hit.eventId}-${hit.ruleId}`">关键词：{{hit.ruleName}} · 事件 #{{hit.eventId}} · 规则版本 {{hit.ruleVersion}}<span v-for="(e,i) in hit.evidence" :key="i">；命中「{{e.term}}」：{{e.text}}</span>
+</p>
+<template v-if="selectedAlert.state==='OPEN'">
+<h3>研判结论</h3>
+<p class="muted">填写研判依据；暂不派发时请说明原因。关闭预警后风险仍按现有规则计算。</p>
+<el-input :disabled="busy" :rows="3" v-model="conclusion" type="textarea" aria-label="研判结论" placeholder="必填：研判结论；暂不派发时说明原因" maxlength="2000"/>
+<div class="case-actions">
+<el-button :disabled="busy" type="primary" @click="assess(false)">记录研判</el-button>
+<el-button :disabled="busy" @click="assess(true)">填写结论并关闭预警</el-button>
+</div>
+<h3>派发单部门任务</h3>
+<p class="muted">选择当前归档事件，仅向承办部门分享完成处置所需的信息与附件。</p>
+<el-form label-position="top" :disabled="busy" class="case-dispatch-form">
+<el-form-item label="任务标题" required>
+<el-input v-model="dispatch.title"/>
+</el-form-item>
+<el-form-item label="关联有效事件（当前归档）" required class="case-wide">
+<el-checkbox-group v-model="dispatch.eventIds">
+<el-checkbox v-for="e in selectedAlert.current.events" :key="e.id" :value="e.id">#{{e.id}} {{e.eventTime}}</el-checkbox>
+</el-checkbox-group>
+</el-form-item>
+<el-form-item label="承办部门" required>
+<el-select v-model="dispatch.departmentId">
+<el-option v-for="d in departments" :key="d.id" :label="d.name" :value="d.id"/>
+</el-select>
+</el-form-item>
+<el-form-item label="处置期限" required>
+<el-date-picker v-model="dispatch.deadline" type="datetime" value-format="YYYY-MM-DDTHH:mm:ss"/>
+</el-form-item>
+<el-form-item label="处置说明" required class="case-wide">
+<el-input v-model="dispatch.instruction" type="textarea"/>
+</el-form-item>
+<el-form-item label="授权联系方式">
+<el-input v-model="dispatch.contact" placeholder="仅填写承办部门必要联系方式，可留空"/>
+</el-form-item>
+<el-form-item label="授权摘要" class="case-wide">
+<el-input v-model="dispatch.summary" type="textarea" placeholder="仅分享需承办部门知悉的内容，可留空"/>
+</el-form-item>
+<el-form-item label="授权附件" class="case-wide">
+<input type="file" aria-label="上传授权附件" :disabled="busy" @change="upload($event,'dispatch')"/>
+<div v-for="f in dispatchFiles" :key="f.id">{{f.fileName}}<el-button link :disabled="busy" @click="dispatchFiles=dispatchFiles.filter(x=>x.id!==f.id)">移除选择</el-button>
+</div>
+</el-form-item>
+<div class="case-actions case-wide">
+<span class="muted">派发时保存授权快照，便于后续核对。</span>
+<el-button :disabled="busy" type="primary" @click="dispatchTask">派发任务</el-button>
+</div>
+</el-form>
+</template>
+<h3>研判历史</h3>
+<el-table :data="selectedAlert.reviews" empty-text="暂无操作记录">
+<el-table-column label="操作" width="120">
+<template #default="{row}">{{actionNames[row.action]}}</template>
+</el-table-column>
+<el-table-column prop="conclusion" label="结论" min-width="300"/>
+<el-table-column prop="actor" label="研判人" min-width="130"/>
+<el-table-column prop="created_at" label="时间" min-width="185"/>
+</el-table>
+</section>
+</el-tab-pane>
+<el-tab-pane label="处置任务" name="tasks">
+<section class="event-card">
+<div class="case-card-heading">
+<div>
+<h2>{{analyst?'派发与审核':'本部门处置任务'}}</h2>
+<p>{{analyst?'跟踪承办进展、部门逾期与中心待审，按需完成审核。':'仅展示本部门获授权的任务、附件与处置记录。'}}</p>
+</div>
+<span class="case-count">共 {{taskTotal}} 条</span>
+</div>
+<div class="case-toolbar">
+<label>任务阶段</label>
+<el-select :disabled="busy" v-model="taskState" clearable aria-label="任务阶段">
+<el-option v-for="s in ['ASSIGNED','RETURNED','SUBMITTED','CLOSED']" :key="s" :label="stateNames[s]" :value="s"/>
+</el-select>
+<el-button :disabled="busy" @click="taskPage=1;run(loadTasks)">刷新任务</el-button>
+</div>
+<el-table :data="tasks" empty-text="暂无符合条件的处置任务">
+<el-table-column prop="id" label="任务编号" width="100"/>
+<el-table-column prop="title" label="任务标题" min-width="200"/>
+<el-table-column prop="department_name" label="承办部门" min-width="130"/>
+<el-table-column label="任务阶段" min-width="140">
+<template #default="{row}">
+<el-tag :type="row.state==='CLOSED'?'info':row.state==='RETURNED'?'warning':'primary'">{{stateNames[row.state]}}</el-tag>
+</template>
+</el-table-column>
+<el-table-column prop="deadline" label="期限" min-width="185"/>
+<el-table-column label="计时与归档" min-width="210">
+<template #default="{row}">
+<el-tag v-if="row.archive_pending" type="warning">归档待确认</el-tag>
+<el-tag v-else-if="row.departmentOverdue" type="danger">部门逾期</el-tag>
+<span v-else class="muted">{{row.state==='CLOSED'?'已结束':'正常流转'}}</span>
+<small class="case-wait">中心待审 {{row.reviewWaitSeconds}} 秒</small>
+</template>
+</el-table-column>
+<el-table-column prop="submitted_at" label="中心待审起点" min-width="185"/>
+<el-table-column label="操作" width="120">
+<template #default="{row}">
+<el-button :disabled="busy" @click="run(()=>openTask(row.id))">查看任务</el-button>
+</template>
+</el-table-column>
+</el-table>
+<el-pagination class="case-pagination" :disabled="busy" v-model:current-page="taskPage" :total="taskTotal" :page-size="20" layout="total, prev, pager, next" @current-change="run(loadTasks)"/>
+</section>
+<section v-if="selectedTask" class="event-card case-detail">
+<div class="case-card-heading">
+<div>
+<p class="eyebrow">处置详情 / #{{selectedTask.id}}</p>
+<h2>任务 #{{selectedTask.id}} · {{selectedTask.title}}</h2>
+</div>
+<el-tag :type="selectedTask.state==='CLOSED'?'info':'primary'">{{stateNames[selectedTask.state]}}</el-tag>
+</div>
+<el-descriptions :column="1" border>
+<el-descriptions-item label="阶段">{{stateNames[selectedTask.state]}}</el-descriptions-item>
+<el-descriptions-item label="承办部门">{{selectedTask.department_name}}</el-descriptions-item>
+<el-descriptions-item label="期限">{{selectedTask.deadline}}</el-descriptions-item>
+<el-descriptions-item label="中心待审起点">{{selectedTask.submitted_at||'尚未进入待审 / 已结束本轮待审'}}</el-descriptions-item>
+<el-descriptions-item label="处置说明">{{selectedTask.instruction}}</el-descriptions-item>
+<el-descriptions-item label="授权联系方式">{{selectedTask.contact||'未授权'}}</el-descriptions-item>
+<el-descriptions-item label="授权摘要">{{selectedTask.summary||'未授权'}}</el-descriptions-item>
+<el-descriptions-item label="关联事件">{{selectedTask.events.map((id:number)=>'#'+id).join('、')}}</el-descriptions-item>
+</el-descriptions>
+<el-alert v-if="selectedTask.archive_pending" title="归档变化，任务暂停，等待中心确认" type="warning" :closable="false"/>
+<el-form v-if="analyst && selectedTask.archive_pending" :disabled="busy" class="case-confirm" label-position="top">
+<h3>确认归档与授权</h3>
+<p class="muted">核实归档后的人员、事件及授权内容，填写理由后恢复任务。</p>
+<el-form-item label="确认人员编号" required>
+<el-input v-model.number="confirmPerson" type="number" aria-label="确认人员编号"/>
+</el-form-item>
+<el-form-item label="确认有效事件编号" required>
+<el-input v-model="confirmEvents" placeholder="确认有效事件编号，英文逗号分隔"/>
+</el-form-item>
+<el-form-item label="确认授权说明" required>
+<el-input v-model="selectedTask.instruction" placeholder="确认授权说明"/>
+</el-form-item>
+<el-form-item label="确认授权联系方式">
+<el-input v-model="selectedTask.contact" placeholder="确认授权联系方式"/>
+</el-form-item>
+<el-form-item label="确认授权摘要">
+<el-input v-model="selectedTask.summary" placeholder="确认授权摘要"/>
+</el-form-item>
+<el-form-item label="确认理由" required>
+<el-input v-model="confirmReason" placeholder="必填确认理由"/>
+</el-form-item>
+<el-button :disabled="busy" type="primary" @click="confirmArchive">确认归档与授权并恢复</el-button>
+</el-form>
+<p>部门逾期：{{selectedTask.departmentOverdue?'是':'否'}} · 中心待审：{{selectedTask.reviewWaitSeconds}} 秒</p>
+<h3>派发时授权快照</h3>
+<p>{{selectedTask.dispatch_snapshot.title}} · {{selectedTask.dispatch_snapshot.departmentName}} · {{selectedTask.dispatch_snapshot.deadline}}</p>
+<p>{{selectedTask.dispatch_snapshot.instruction}}</p>
+<p>联系方式：{{selectedTask.dispatch_snapshot.contact||'未授权'}}；摘要：{{selectedTask.dispatch_snapshot.summary||'未授权'}}</p>
+<h3>任务附件</h3>
+<p v-if="!selectedTask.attachments.length" class="muted">暂无授权附件</p>
+<p v-for="f in selectedTask.attachments" :key="f.id">
+<a :href="`/api/cases/attachments/${f.id}`">{{f.file_name}}</a> · {{f.stage==='DISPATCH'?'派发授权':'部门跟进'}} · {{f.owner_username}} <span v-if="f.note_id">（记录 #{{f.note_id}}）</span>
+</p>
+<template v-if="handler && selectedTask.department_id===account.departmentId && ['ASSIGNED','RETURNED'].includes(selectedTask.state)">
+<h3>部门跟进与结果</h3>
+<p class="muted">填写本轮进展或处理结果；提交后等待中心审核。</p>
+<el-input :disabled="busy" :rows="4" v-model="progressText" type="textarea" aria-label="跟进或处理结果" placeholder="填写跟进进展或提交的处理结果"/>
+<input type="file" aria-label="上传跟进附件" :disabled="busy" @change="upload($event,'progress')"/>
+<div v-for="f in progressFiles" :key="f.id">{{f.fileName}}<el-button link :disabled="busy" @click="progressFiles=progressFiles.filter(x=>x.id!==f.id)">移除选择</el-button>
+</div>
+<div class="case-actions">
+<el-button :disabled="busy" @click="progress(false)">保存跟进</el-button>
+<el-button :disabled="busy" type="primary" @click="progress(true)">提交处理结果</el-button>
+</div>
+</template>
+<template v-if="analyst && selectedTask.state==='SUBMITTED'">
+<h3>中心审核</h3>
+<p class="muted">填写审核理由，可退回补充或通过并关闭任务。</p>
+<el-input :disabled="busy" :rows="3" v-model="reviewReason" type="textarea" aria-label="任务审核理由" placeholder="必填：审核结论或补充要求"/>
+<p>明确选择需要办结的关联事件；不选则只关闭任务。</p>
+<el-checkbox-group v-model="completeIds" :disabled="busy">
+<el-checkbox v-for="id in selectedTask.events" :key="id" :value="id">办结事件 #{{id}}</el-checkbox>
+</el-checkbox-group>
+<div class="case-actions">
+<el-button :disabled="busy" @click="reviewTask('RETURN')">退回补充</el-button>
+<el-button :disabled="busy" type="primary" @click="reviewTask('CLOSE')">通过并关闭任务</el-button>
+</div>
+</template>
+<h3>跟进、提交与审核历史</h3>
+<el-table :data="selectedTask.history" empty-text="暂无操作记录">
+<el-table-column prop="id" label="记录" width="85"/>
+<el-table-column label="操作" width="120">
+<template #default="{row}">{{actionNames[row.action]}}</template>
+</el-table-column>
+<el-table-column prop="content" label="内容" min-width="300"/>
+<el-table-column prop="actor" label="操作者" min-width="130"/>
+<el-table-column prop="created_at" label="时间" min-width="185"/>
+<el-table-column label="明确办结事件" min-width="160">
+<template #default="{row}">{{decoded(row.completed_events).join('、')}}</template>
+</el-table-column>
+</el-table>
+<p class="muted">任务关闭和事件办结不降低累计风险；风险预警由中心另行研判并关闭。</p>
+</section>
+</el-tab-pane>
+</el-tabs>
+</main>
+</template>
