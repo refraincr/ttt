@@ -67,3 +67,12 @@
   .rule-thresholds { grid-template-columns: minmax(0, 1fr); gap: 0; }
   .rule-publication { gap: 20px; }
 }
+.batch-result-dialog { --el-color-primary: #246c5b; --el-dialog-border-radius: 12px; --el-dialog-padding-primary: 24px; display: flex; flex-direction: column; max-height: 88dvh; color: #243c35; }
+.batch-result-dialog .el-dialog__header { padding-bottom: 18px; border-bottom: 1px solid #e1e8e4; flex-shrink: 0; }
+.batch-result-dialog .el-dialog__title { font-size: 18px; font-weight: 600; overflow-wrap: anywhere; }
+.batch-result-dialog .el-dialog__body { overflow-y: auto; min-height: 0; }
+.batch-result-dialog .el-dialog__footer { border-top: 1px solid #e1e8e4; padding-top: 18px; flex-shrink: 0; }
+.batch-result-dialog .el-table { --el-table-header-bg-color: #f5f7f4; --el-table-header-text-color: #63796b; --el-table-border-color: #edf1ed; --el-table-row-hover-bg-color: #f5f9f5; color: #40584a; }
+.batch-result-dialog .el-table .cell { overflow-wrap: anywhere; }
+.batch-result-note { color: #63796b; font-size: 13px; line-height: 1.8; margin: 18px 0; }
+@media (max-width: 760px) { .batch-result-dialog { --el-dialog-padding-primary: 18px; } }

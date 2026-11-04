@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import {ref,onMounted,computed,watch} from 'vue'
+import {ref,onMounted,onBeforeUnmount,computed,watch} from 'vue'
 import {api,ApiError,type Account} from './api'
 import './risk.css'
 import './governance.css'
@@ -21,6 +21,56 @@ const fields=['personName','idCard','phone','eventTime','description','categoryI
 const mappingName=ref(''),columns=ref<Record<string,string>>(Object.fromEntries(fields.map((f,i)=>[f,labels[i]]))),categoryAliases=ref(''),disputeAliases=ref(''),timeFormat=ref('ISO')
 const credential=ref({name:'',departmentId:0,sourceId:0,specialReport:false})
 const availableMappings=computed(()=>mappings.value.filter(m=>m.source_id===source.value))
+const batchDialogVisible=ref(false),batchFilename=ref(''),batchError=ref(''),batchLoading=ref(false),batchRowsLoaded=ref(false)
+let batchTimer:ReturnType<typeof setTimeout>|undefined
+let batchRequest:AbortController|undefined
+let disposed=false
+function stopBatchRefresh(){
+  clearTimeout(batchTimer)
+  batchRequest?.abort()
+  batchRequest=undefined
+  batchLoading.value=false
+}
+async function refreshBatchRows(){
+  if(disposed||!batchDialogVisible.value||!selected.value||batchLoading.value)return
+  clearTimeout(batchTimer)
+  const id=selected.value,request=new AbortController()
+  batchRequest=request
+  batchLoading.value=true
+  batchError.value=''
+  let expired=false
+  try{
+    const result=await api<Row[]>('/batches/'+id,{signal:request.signal})
+    if(batchRequest!==request)return
+    rows.value=result
+    batchRowsLoaded.value=true
+    const batch=batches.value.find(item=>item.id===id)
+    if(batch)Object.assign(batch,{total:result.length,pending:result.filter(r=>r.state==='PENDING').length,succeeded:result.filter(r=>r.state==='SUCCESS').length,failed:result.filter(r=>r.state==='FAILED').length,duplicates:result.filter(r=>r.state==='DUPLICATE').length})
+  }catch(e){
+    if(batchRequest!==request)return
+    batchError.value=e instanceof Error?e.message:'结果读取失败，请重试'
+    if(e instanceof ApiError&&e.status===401){expired=true;emit('expired')}
+  }finally{
+    if(batchRequest===request){
+      batchRequest=undefined
+      batchLoading.value=false
+      if(!expired&&batchDialogVisible.value&&(!batchRowsLoaded.value||rows.value.some(row=>row.state==='PENDING')))
+        batchTimer=setTimeout(refreshBatchRows,3000)
+    }
+  }
+}
+function openBatch(batch:Row){
+  if(disposed)return
+  stopBatchRefresh()
+  selected.value=batch.id
+  batchFilename.value=batch.filename
+  rows.value=[]
+  batchRowsLoaded.value=false
+  batchDialogVisible.value=true
+  void refreshBatchRows()
+}
+watch(batchDialogVisible,visible=>{if(!visible)stopBatchRefresh()},{flush:'sync'})
+onBeforeUnmount(()=>{disposed=true;stopBatchRefresh()})
 async function run(fn:()=>Promise<void>){if(busy.value)return;busy.value=true;error.value='';message.value='';try{await fn()}catch(e){error.value=e instanceof Error?e.message:'操作失败';if(e instanceof ApiError&&e.status===401)emit('expired')}finally{busy.value=false}}
 const post=<T,>(path:string,data:unknown)=>api<T>(path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)})
 async function refresh(){sources.value=await api('/options/sources');if(analyst.value||props.account.roles.includes('DEPARTMENT_REPORTER')){mappings.value=await api('/batches/mappings');batches.value=await api('/batches')}if(analyst.value){ruleData.value=await api('/risk-governance/rules');receipts.value=await api('/batches/receipts')}if(admin.value)credentials.value=await api('/batches/credentials')}
@@ -33,13 +83,13 @@ watch([thresholds,keywords],()=>{preview.value=undefined},{deep:true})
 async function saveDraft(){if(!thresholds.value.medium||thresholds.value.high<=thresholds.value.medium)throw Error('高风险起始次数须大于中风险起始次数');if(keywords.value.some(k=>!k.name.trim()||k.terms.some((t:string)=>!t.trim())))throw Error('请填写规则名称和每个关键词');draft.value=await post('/risk-governance/rules',{id:draft.value?.id,version:draft.value?.version,rules:{...thresholds.value,keywords:keywords.value}});savedRules.value=rulesPayload.value;preview.value=undefined;await refresh();message.value='规则草稿已保存'}
 async function doPreview(){if(unsaved.value)throw Error('请先保存当前修改，再预览影响');preview.value=await post('/risk-governance/rules/'+draft.value!.id+'/preview',{})}
 async function publish(){if(unsaved.value||!preview.value)throw Error('请先保存并预览当前草稿');await post('/risk-governance/rules/'+draft.value!.id+'/publish',{version:draft.value!.version});draft.value=undefined;preview.value=undefined;editing.value=false;message.value='规则已发布，请刷新查看重算进度';await refresh()}
-async function upload(){if(!file.value||!source.value)throw Error('请选择来源和文件');const form=new FormData();form.append('file',file.value);form.append('sourceId',String(source.value));if(mappingId.value)form.append('mappingId',String(mappingId.value));const result=await api<Row>('/batches',{method:'POST',body:form});selected.value=result.id;await refresh();rows.value=await api('/batches/'+result.id);message.value='已接收，请刷新查看逐行结果'}
+async function upload(){if(!file.value||!source.value)throw Error('请选择来源和文件');const filename=file.value.name;const form=new FormData();form.append('file',file.value);form.append('sourceId',String(source.value));if(mappingId.value)form.append('mappingId',String(mappingId.value));const result=await api<Row>('/batches',{method:'POST',body:form});if(disposed)return;message.value='已接收，处理结果将在弹窗中更新';openBatch({...result,filename});await refresh()}
 function aliases(value:string){return Object.fromEntries(value.split('\n').filter(Boolean).map(line=>{const i=line.indexOf('=');if(i<1)throw Error('别名格式为 原值=标准分类编号，每行一条');return [line.slice(0,i),line.slice(i+1)]}))}
 async function saveMapping(){await post('/batches/mappings',{name:mappingName.value,sourceId:source.value,columns:Object.fromEntries(Object.entries(columns.value).filter(([field,value])=>field!=='address'||value.trim())),categories:aliases(categoryAliases.value),disputes:aliases(disputeAliases.value),timeFormat:timeFormat.value});await refresh();message.value='映射版本已保存'}
 onMounted(()=>run(refresh))
 </script>
 <template><main class="content governance-workspace"><div class="page-heading"><div><p class="eyebrow">规则治理与数据接入</p><h1>规则与批量接入</h1><p class="muted">管理风险规则与接入配置，跟踪批量处理结果。</p></div><el-button :disabled="busy" @click="run(refresh)">刷新进度</el-button></div><el-alert v-if="error" :title="error" type="error" :closable="false"/><el-alert v-if="message" :title="message" type="success" :closable="false"/><p v-if="busy" class="governance-loading" role="status">正在处理，请稍候…</p><el-tabs class="governance-tabs">
-<el-tab-pane v-if="analyst||account.roles.includes('DEPARTMENT_REPORTER')" label="批量导入"><section class="event-card"><h2>批量文件导入</h2><el-form class="import-form" label-position="top"><div class="form-grid"><el-form-item label="可信数据来源"><el-select v-model="source" @change="mappingId=undefined"><el-option v-for="s in sources" :key="s.id" :label="s.name" :value="s.id"/></el-select></el-form-item><el-form-item label="来源映射版本"><el-select v-model="mappingId" clearable placeholder="统一模板"><el-option v-for="m in availableMappings" :key="m.id" :value="m.id" :label="m.name+' · 版本 '+m.version"/></el-select></el-form-item></div><p v-if="source" class="template-links"><a :href="`/api/batches/template?sourceId=${source}&format=csv${mappingId?'&mappingId='+mappingId:''}`">下载 CSV 模板</a> · <a :href="`/api/batches/template?sourceId=${source}&format=xlsx${mappingId?'&mappingId='+mappingId:''}`">下载 Excel 模板</a></p><div class="upload-row"><input type="file" accept=".csv,.xlsx" aria-label="导入文件" @change="file=($event.target as HTMLInputElement).files?.[0]"/><el-button type="primary" :disabled="busy" @click="run(upload)">提交批量导入</el-button></div></el-form><p class="help-note">最多10000行、5MB。事件分类和纠纷类型直接填写“来源与分类”中已启用的名称，无需填写编号。错误行不影响其他行；下载失败行修正后重导。身份证和日期请使用文本单元格，日期格式默认为 ISO，例如 2026-10-18T12:00:00。</p><h3 class="section-heading">导入批次</h3><el-table :data="batches"><el-table-column prop="id" label="批次"/><el-table-column prop="filename" label="文件" min-width="150" show-overflow-tooltip/><el-table-column prop="total" label="总行数"/><el-table-column prop="pending" label="待处理"/><el-table-column prop="succeeded" label="成功"/><el-table-column prop="duplicates" label="重复"/><el-table-column prop="failed" label="失败"/><el-table-column label="操作" width="230"><template #default="{row}"><div class="table-actions"><el-button link type="primary" @click="run(async()=>{selected=row.id;rows=await api('/batches/'+row.id)})">逐行结果</el-button><a :href="`/api/batches/${row.id}/failures`">失败文件</a> · <a :href="`/api/batches/${row.id}/original`">原文件</a></div></template></el-table-column></el-table><section v-if="selected" class="detail-panel"><h3>批次 #{{selected}} · 逐行结果</h3><el-table :data="rows"><el-table-column prop="line_number" label="原始行号"/><el-table-column label="结果" min-width="130"><template #default="{row}"><el-tag :type="row.state==='SUCCESS'?'success':row.state==='FAILED'?'danger':row.state==='PENDING'?'warning':'info'" effect="plain">{{ importStates[row.state] || '未知状态' }}</el-tag></template></el-table-column><el-table-column prop="record_id" label="来源记录"/><el-table-column prop="error" label="失败原因" min-width="200"/></el-table></section></section></el-tab-pane>
+<el-tab-pane v-if="analyst||account.roles.includes('DEPARTMENT_REPORTER')" label="批量导入"><section class="event-card"><h2>批量文件导入</h2><el-form class="import-form" label-position="top"><div class="form-grid"><el-form-item label="可信数据来源"><el-select v-model="source" @change="mappingId=undefined"><el-option v-for="s in sources" :key="s.id" :label="s.name" :value="s.id"/></el-select></el-form-item><el-form-item label="来源映射版本"><el-select v-model="mappingId" clearable placeholder="统一模板"><el-option v-for="m in availableMappings" :key="m.id" :value="m.id" :label="m.name+' · 版本 '+m.version"/></el-select></el-form-item></div><p v-if="source" class="template-links"><a :href="`/api/batches/template?sourceId=${source}&format=csv${mappingId?'&mappingId='+mappingId:''}`">下载 CSV 模板</a> · <a :href="`/api/batches/template?sourceId=${source}&format=xlsx${mappingId?'&mappingId='+mappingId:''}`">下载 Excel 模板</a></p><div class="upload-row"><input type="file" accept=".csv,.xlsx" aria-label="导入文件" @change="file=($event.target as HTMLInputElement).files?.[0]"/><el-button type="primary" :disabled="busy" @click="run(upload)">提交批量导入</el-button></div></el-form><p class="help-note">最多10000行、5MB。事件分类和纠纷类型直接填写“来源与分类”中已启用的名称，无需填写编号。错误行不影响其他行；下载失败行修正后重导。身份证和日期请使用文本单元格，日期格式默认为 ISO，例如 2026-10-18T12:00:00。</p><h3 class="section-heading">导入批次</h3><el-table :data="batches"><el-table-column prop="id" label="批次"/><el-table-column prop="filename" label="文件" min-width="150" show-overflow-tooltip/><el-table-column prop="total" label="总行数"/><el-table-column prop="pending" label="待处理"/><el-table-column prop="succeeded" label="成功"/><el-table-column prop="duplicates" label="重复"/><el-table-column prop="failed" label="失败"/><el-table-column label="操作" width="230"><template #default="{row}"><div class="table-actions"><el-button link type="primary" @click="openBatch(row)">逐行结果</el-button><a :href="`/api/batches/${row.id}/failures`">失败文件</a> · <a :href="`/api/batches/${row.id}/original`">原文件</a></div></template></el-table-column></el-table></section></el-tab-pane>
 <el-tab-pane v-if="analyst" label="误命中与人工调整"><section class="event-card risk-adjustment-card"><h2>误命中与人工调整</h2><p class="risk-adjustment-note">按人员编号读取当前依据。人工调整和误命中排除须填写核实理由，依据变化后自动失效；可信特殊来源保底仍然生效。</p><div class="tools-toolbar"><el-input-number v-model="personId" :min="1" aria-label="风险人员编号"/><el-button :disabled="busy" @click="run(openPerson)">查看调整依据</el-button></div><section v-if="detail" class="detail-panel"><div class="risk-metrics"><div><span>规则等级</span><strong>{{level(detail.snapshot.ruleLevel)}}</strong><small>当前有效事件与命中规则</small></div><div><span>有效人工调整</span><strong>{{detail.snapshot.manualLevel ? level(detail.snapshot.manualLevel) : '无或已失效'}}</strong><small>以当前核实依据为准</small></div><div><span>最终等级</span><strong>{{level(detail.snapshot.finalLevel)}}</strong><small>综合规则、人工调整及保底</small></div></div><el-form label-position="top" class="adjustment-form" :disabled="busy"><el-form-item label="排除或调整理由" required><el-input v-model="reason" placeholder="排除或调整理由（必填）" aria-label="风险调整理由" type="textarea" :rows="3"/></el-form-item><el-form-item label="人工调整等级"><el-select v-model="manual" aria-label="人工调整等级"><el-option v-for="l in ['LOW','MEDIUM','HIGH']" :key="l" :value="l" :label="level(l)"/></el-select></el-form-item><el-button type="primary" :disabled="busy" @click="run(adjust)">保存人工调整</el-button></el-form><article v-for="item in detail.hits" :key="item.hit.eventId+'-'+item.hit.ruleId"><h3>事件 #{{item.hit.eventId}} · {{item.hit.ruleName}}</h3><p v-for="e in item.hit.evidence" :key="e.recordId+'-'+e.field+'-'+e.term">来源 #{{e.recordId}} · {{e.field}}：{{e.text}}</p><el-button :disabled="busy" @click="run(()=>exclude(item))">排除此误命中</el-button></article><h3>调整历史（依据变化后自动失效）</h3><el-table :data="detail.adjustments"><el-table-column label="依据状态" min-width="130"><template #default="{row}">{{row.active?'依据未失效':'已失效'}}</template></el-table-column><el-table-column label="调整等级" min-width="100"><template #default="{row}">{{level(row.level)}}</template></el-table-column><el-table-column prop="reason" label="原因" min-width="200" show-overflow-tooltip/><el-table-column prop="actor" label="操作者" min-width="120"/><el-table-column prop="created_at" label="时间" min-width="190"/></el-table><h3>计算历史</h3><el-table :data="detail.history"><el-table-column prop="created_at" label="计算时间" min-width="190"/><el-table-column label="历史依据" min-width="260"><template #default="{row}"><details><summary>查看历史规则和证据</summary><pre>{{JSON.stringify(typeof row.snapshot==='string'?JSON.parse(row.snapshot):row.snapshot,null,2)}}</pre></details></template></el-table-column></el-table><h3>排除历史</h3><el-table :data="detail.exclusions"><el-table-column label="状态"><template #default="{row}">{{row.active?'有效':'已失效'}}</template></el-table-column><el-table-column prop="event_id" label="事件"/><el-table-column prop="rule_id" label="规则"/><el-table-column prop="reason" label="原因" min-width="200" show-overflow-tooltip/></el-table></section></section></el-tab-pane>
 <el-tab-pane v-if="analyst" label="规则发布">
 <div class="rule-publication" :aria-busy="busy">
@@ -67,7 +117,19 @@ onMounted(()=>run(refresh))
 <el-tab-pane v-if="analyst" label="来源映射"><section class="event-card"><h2>来源字段映射</h2><p class="help-note">先在批量导入页选择来源。保存同名映射会新增版本，旧批次保留原映射；联系地址为选填列，不接入时可清空对应列名。</p><el-form class="mapping-form" label-position="top"><el-form-item label="映射名称"><el-input v-model="mappingName" placeholder="映射名称"/></el-form-item><el-form-item v-for="(f,i) in fields" :key="f" :label="labels[i]+'对应列名'"><el-input v-model="columns[f]"/></el-form-item><el-form-item label="日期转换"><el-select v-model="timeFormat"><el-option v-for="f in ['ISO','yyyy/MM/dd HH:mm:ss','yyyy-MM-dd HH:mm:ss']" :key="f" :value="f"/></el-select></el-form-item><el-form-item label="事件分类别名"><el-input v-model="categoryAliases" type="textarea" :rows="3" placeholder="事件分类别名：原值=标准分类编号，每行一条"/></el-form-item><el-form-item label="纠纷类型别名"><el-input v-model="disputeAliases" type="textarea" :rows="3" placeholder="纠纷类型别名：原值=标准分类编号，每行一条"/></el-form-item><el-button :disabled="busy" @click="run(saveMapping)">保存映射新版本</el-button></el-form></section></el-tab-pane>
 <el-tab-pane v-if="admin" label="外部接入凭据"><section class="event-card"><h2>外部接入凭据</h2><el-form class="credential-form" label-position="top"><el-form-item label="凭据名称"><el-input v-model="credential.name"/></el-form-item><el-form-item label="绑定部门编号"><el-input-number v-model="credential.departmentId" :min="1"/></el-form-item><el-form-item label="绑定来源"><el-select v-model="credential.sourceId"><el-option v-for="s in sources" :key="s.id" :label="s.name" :value="s.id"/></el-select></el-form-item><el-form-item label="上报权限"><el-switch v-model="credential.specialReport" active-text="允许特殊上报"/></el-form-item><el-button :disabled="busy" @click="run(async()=>{const c=await post<Row>('/batches/credentials',credential);token=c.token;await refresh()})">创建凭据</el-button></el-form><p v-if="token">仅本次显示，请保存：<code>{{token}}</code></p><el-table :data="credentials"><el-table-column prop="name" label="名称"/><el-table-column prop="department_id" label="部门"/><el-table-column prop="source_id" label="来源"/><el-table-column prop="enabled" label="启用"/><el-table-column label="操作"><template #default="{row}"><el-button :disabled="busy||!row.enabled" @click="run(async()=>{await api('/batches/credentials/'+row.id,{method:'DELETE'});await refresh()})">停用凭据</el-button></template></el-table-column></el-table></section></el-tab-pane>
 <el-tab-pane v-if="analyst" label="外部接收结果"><section class="event-card"><h2>外部接收结果</h2><el-table :data="receipts"><el-table-column prop="name" label="凭据"/><el-table-column prop="external_id" label="外部编号"/><el-table-column prop="record_id" label="来源记录"/><el-table-column prop="error" label="失败原因"/><el-table-column prop="created_at" label="接收时间"/></el-table></section></el-tab-pane>
-</el-tabs></main></template>
+</el-tabs>
+<el-dialog v-model="batchDialogVisible" :title="`批次 #${selected} · ${batchFilename} · 逐行结果`" class="batch-result-dialog" width="min(960px, calc(100vw - 32px))" align-center append-to-body>
+  <el-alert v-if="batchError" :title="batchError" type="error" :closable="false"/>
+  <p class="batch-result-note" role="status">{{ batchLoading ? '正在读取结果…' : !batchRowsLoaded ? '暂未读取到结果，请重试。' : rows.some(row=>row.state==='PENDING') ? '存在待处理行，每 3 秒自动刷新。关闭弹窗后后台继续处理。' : '当前批次已处理完成。' }}</p>
+  <el-table :data="rows" row-key="line_number" max-height="55vh" empty-text="暂无逐行结果">
+    <el-table-column prop="line_number" label="原始行号" min-width="100"/>
+    <el-table-column label="结果" min-width="140"><template #default="{row}"><el-tag :type="row.state==='SUCCESS'?'success':row.state==='FAILED'?'danger':row.state==='PENDING'?'warning':'info'" effect="plain">{{ importStates[row.state] || '未知状态' }}</el-tag></template></el-table-column>
+    <el-table-column prop="record_id" label="来源记录" min-width="110"/>
+    <el-table-column prop="error" label="失败原因" min-width="240"/>
+  </el-table>
+  <template #footer><el-button :loading="batchLoading" @click="refreshBatchRows">刷新结果</el-button><el-button type="primary" @click="batchDialogVisible=false">关闭</el-button></template>
+</el-dialog>
+</main></template>
 
 <style scoped>
 .governance-workspace :deep(.el-tabs__header) { margin-bottom: 16px; }
