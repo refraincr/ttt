@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test'
-import { demoPassword, uniqueName } from './support'
+import { demoPassword, signIn, uniqueName, write } from './support'
 
 test('管理员通过页面创建部门和兼任账号，刷新后保留，可停用账号', async ({ page }) => {
   await page.goto('/')
@@ -34,4 +34,51 @@ test('管理员通过页面创建部门和兼任账号，刷新后保留，可�
   await page.getByRole('button', { name: '保存账号', exact: true }).click()
   await expect(page.getByRole('row').filter({ hasText: username })).toContainText('停用')
   await page.screenshot({ path: 'test-results/account-management.png', fullPage: true, animations: 'disabled' })
+})
+
+test('账号与部门查询支持组合筛选、空结果、重置及切换清空条件', async ({ page, request }) => {
+  await signIn(request)
+  const departmentName = uniqueName('查询部门')
+  const departmentResponse = await write(request, 'POST', '/api/admin/departments', {
+    name: departmentName, departmentType: 'DEPARTMENT', enabled: true,
+  })
+  expect(departmentResponse.status()).toBe(201)
+  const department = await departmentResponse.json()
+  const username = uniqueName('query')
+  expect((await write(request, 'POST', '/api/admin/users', {
+    username, displayName: '查询测试员', departmentId: department.id, enabled: false,
+    roles: ['DEPARTMENT_REPORTER', 'DEPARTMENT_HANDLER'], password: 'Interface-Test-2026!',
+  })).status()).toBe(201)
+  await page.goto('/')
+  await page.getByRole('textbox', { name: '账号', exact: true }).fill('admin')
+  await page.getByRole('textbox', { name: '密码', exact: true }).fill(demoPassword)
+  await page.getByRole('button', { name: '登录', exact: true }).click()
+  await page.getByRole('button', { name: '部门与账号', exact: true }).click()
+  const keyword = page.getByRole('textbox', { name: '查找账号', exact: true })
+  await expect(page.getByRole('tabpanel', { name: '账号管理', exact: true }).getByRole('textbox', { name: '查找账号', exact: true })).toBeVisible()
+  await keyword.fill(username.toUpperCase())
+  await keyword.press('Enter')
+  await expect(page.locator('.accounts-card .el-table__body-wrapper tbody tr')).toHaveCount(1)
+  await expect(page.getByRole('row').filter({ hasText: username })).toContainText('部门处置')
+  await page.getByRole('combobox', { name: '筛选启用状态', exact: true }).press('Enter')
+  await page.getByRole('option', { name: '启用', exact: true }).click()
+  await page.getByRole('button', { name: '查询', exact: true }).click()
+  await expect(page.getByText('没有符合条件的账号，请调整查询条件')).toBeVisible()
+  await page.getByRole('combobox', { name: '筛选启用状态', exact: true }).press('Enter')
+  await page.getByRole('option', { name: '停用', exact: true }).click()
+  await page.getByRole('combobox', { name: '筛选归属部门', exact: true }).click()
+  await page.getByRole('option', { name: departmentName, exact: true }).click()
+  await page.getByRole('button', { name: '查询', exact: true }).click()
+  await expect(page.getByRole('row').filter({ hasText: username })).toContainText('停用')
+  await page.getByRole('tab', { name: '部门管理', exact: true }).click()
+  await expect(page.getByRole('tabpanel', { name: '部门管理', exact: true }).getByRole('textbox', { name: '查找部门', exact: true })).toBeVisible()
+  await expect(page.getByRole('textbox', { name: '查找部门', exact: true })).toHaveValue('')
+  await page.getByRole('textbox', { name: '查找部门', exact: true }).fill(departmentName)
+  await page.getByRole('button', { name: '查询', exact: true }).click()
+  await expect(page.locator('.accounts-card .el-table__body-wrapper tbody tr')).toHaveCount(1)
+  await page.getByRole('textbox', { name: '查找部门', exact: true }).fill(uniqueName('不存在'))
+  await page.getByRole('button', { name: '查询', exact: true }).click()
+  await expect(page.getByText('没有符合条件的部门，请调整查询条件')).toBeVisible()
+  await page.getByRole('button', { name: '重置', exact: true }).click()
+  await expect(page.getByRole('row').filter({ hasText: departmentName })).toBeVisible()
 })

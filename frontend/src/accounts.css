@@ -1,0 +1,77 @@
+.accounts-workspace { padding: 32px 36px; max-width: 1680px; }
+.accounts-workspace .page-heading { gap: 20px; }
+.accounts-workspace .page-heading h1 { font-size: 28px; letter-spacing: 1px; margin-bottom: 10px; }
+.accounts-workspace .eyebrow { font-size: 11px; color: #69836e; margin-bottom: 8px; }
+.accounts-workspace .muted { color: var(--workspace-muted); line-height: 1.7; }
+.accounts-summary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin-bottom: 24px; }
+.accounts-summary > div { display: flex; align-items: center; gap: 16px; padding: 22px; background: #fff; border: 1px solid var(--workspace-border); border-radius: var(--workspace-radius); }
+.summary-icon { display: grid; place-items: center; width: 44px; height: 44px; flex-shrink: 0; background: #eef5f0; color: #47735a; border-radius: 12px; }
+.accounts-summary > div > div { min-width: 0; }
+.accounts-summary span:not(.summary-icon) { font-size: 12px; color: var(--workspace-muted); }
+.accounts-summary strong { display: block; margin-top: 8px; font-size: 27px; font-weight: 600; overflow-wrap: anywhere; }
+.accounts-summary small { margin-left: 10px; font-size: 11px; color: var(--workspace-muted); font-weight: 400; }
+.accounts-workspace .accounts-card { padding: 0; overflow: hidden; border-color: var(--workspace-border); border-radius: var(--workspace-radius); box-shadow: var(--workspace-shadow); }
+.accounts-card .el-tabs__header { margin: 0; padding: 8px 24px 0; }
+.accounts-card .el-tabs__nav-wrap::after { height: 1px; background: var(--workspace-border); }
+.accounts-card .el-tabs__item { height: 52px; }
+.accounts-filters { padding: 24px; }
+.accounts-filter-fields { display: grid; grid-template-columns: minmax(0, 2fr) repeat(2, minmax(0, 1fr)); gap: 18px; }
+.accounts-filter-fields label { min-width: 0; display: flex; flex-direction: column; gap: 9px; font-size: 13px; color: #4f655a; }
+.accounts-filter-fields .el-input__wrapper, .accounts-filter-fields .el-select__wrapper { min-height: 38px; }
+.accounts-filter-actions { margin-top: 20px; display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
+.accounts-filter-actions .el-button + .el-button { margin-left: 0; }
+.accounts-filter-actions .muted { margin-left: auto; font-size: 12px; }
+.accounts-results-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 22px 24px; border-top: 1px solid var(--workspace-border); }
+.accounts-results-heading h2 { font-size: 15px; margin: 0; }
+.accounts-results-heading h2 span { margin-left: 10px; padding: 3px 9px; background: #eef5ef; color: #467455; border-radius: 5px; font-size: 12px; font-weight: 500; }
+.accounts-results-heading p { margin: 8px 0 0; font-size: 12px; }
+.accounts-results-heading .el-button { flex-shrink: 0; }
+.accounts-card .el-table { --el-table-header-bg-color: #f5f7f4; --el-table-header-text-color: #63796b; --el-table-border-color: #edf1ed; --el-table-row-hover-bg-color: #f5f9f5; color: #40584a; }
+.accounts-card .el-table th .cell { font-weight: 500; }
+.account-role-tags { display: flex; flex-wrap: wrap; gap: 6px; padding: 3px 0; }
+.accounts-table-note { padding: 18px 24px; font-size: 12px; color: var(--workspace-muted); line-height: 1.7; }
+.accounts-workspace .data-note { color: #718475; line-height: 1.8; }
+.account-dialog { --el-dialog-padding-primary: 24px; --el-dialog-border-radius: 12px; color: #243c35; display: flex; flex-direction: column; max-height: 88dvh; margin-top: 6dvh; }
+.account-dialog .el-dialog__header { padding-bottom: 20px; border-bottom: 1px solid #e1e8e4; }
+.account-dialog .el-dialog__title { color: #243c35; font-size: 18px; font-weight: 600; }
+.account-dialog .el-dialog__body { padding-top: 22px; overflow-y: auto; min-height: 0; }
+.account-dialog .el-dialog__header, .account-dialog .el-dialog__footer { flex-shrink: 0; }
+.account-dialog .el-dialog__footer { border-top: 1px solid #e1e8e4; padding-top: 18px; }
+.account-form-section + .account-form-section { margin-top: 24px; padding-top: 22px; border-top: 1px solid #edf1ed; }
+.account-form-section h3 { font-size: 14px; margin-bottom: 14px; padding-left: 10px; border-left: 3px solid #41765b; }
+.account-form-section h3 span { font-size: 11px; color: #687c75; font-weight: 400; margin-left: 8px; }
+.account-dialog .muted { color: #687c75; line-height: 1.7; }
+.account-form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.account-dialog .el-form-item { margin-bottom: 20px; }
+.account-dialog .el-select { width: 100%; min-width: 0; }
+.account-role-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.account-role-options .el-checkbox { margin: 0; height: auto; min-height: 40px; padding: 8px 12px; border: 1px solid #e1e8e4; border-radius: 7px; }
+.account-role-options .el-checkbox.is-checked { background: #eef5f1; border-color: #91b6aa; }
+.account-role-options .el-checkbox__label { white-space: normal; overflow-wrap: anywhere; }
+.account-form-help { color: #687c75; font-size: 12px; line-height: 1.8; margin: 12px 0 0; }
+.account-status-setting { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 16px; margin-bottom: 20px; background: #f5f7f4; border-radius: 8px; }
+.account-status-setting strong { font-size: 13px; font-weight: 500; }
+.account-status-setting p { font-size: 12px; color: #687c75; line-height: 1.7; margin: 6px 0 0; }
+.account-status-setting .el-switch { flex-shrink: 0; }
+@media (max-width: 1100px) {
+  .accounts-workspace { padding: 28px 24px; }
+  .accounts-summary > div { padding: 18px; gap: 12px; }
+  .accounts-summary small { display: block; margin: 5px 0 0; }
+}
+@media (max-width: 760px) {
+  .accounts-workspace { padding: 24px 16px; }
+  .accounts-workspace .page-heading { flex-wrap: wrap; gap: 4px; }
+  .accounts-workspace .page-heading h1 { font-size: 24px; }
+  .accounts-summary { gap: 8px; margin-bottom: 20px; }
+  .accounts-summary > div { display: block; padding: 14px 10px; }
+  .accounts-summary .summary-icon { display: none; }
+  .accounts-summary strong { font-size: 24px; }
+  .accounts-summary small { display: block; margin: 6px 0 0; line-height: 1.5; }
+  .accounts-filter-fields { grid-template-columns: minmax(0, 1fr); gap: 16px; }
+  .accounts-filters, .accounts-results-heading { padding: 20px 16px; }
+  .accounts-card .el-tabs__header { padding-left: 16px; padding-right: 16px; }
+  .accounts-filter-actions .muted { flex-basis: 100%; margin-top: 4px; }
+  .accounts-table-note { padding: 16px; }
+  .account-dialog { --el-dialog-padding-primary: 18px; }
+  .account-form-grid, .account-role-options { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+}
