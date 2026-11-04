@@ -1,0 +1,97 @@
+.intake-workspace { padding: 32px 36px; max-width: 1680px; }
+.intake-workspace .page-heading { gap: 20px; }
+.intake-workspace .page-heading h1 { font-size: 28px; letter-spacing: 1px; margin-bottom: 10px; }
+.intake-workspace .eyebrow { color: #69836e; font-size: 11px; margin-bottom: 8px; }
+.intake-workspace .muted { color: var(--workspace-muted); line-height: 1.7; }
+.intake-process { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin-bottom: 24px; }
+.intake-process > div { display: flex; align-items: center; gap: 16px; background: #fff; padding: 22px; border: 1px solid var(--workspace-border); border-radius: var(--workspace-radius); }
+.intake-process > div > span { display: grid; place-items: center; width: 40px; height: 40px; flex-shrink: 0; border-radius: 12px; background: #eef5f0; color: #47735a; font-size: 14px; font-weight: 600; }
+.intake-process strong { font-size: 14px; font-weight: 600; }
+.intake-process p { margin: 7px 0 0; color: var(--workspace-muted); font-size: 12px; line-height: 1.6; }
+.intake-loading { padding: 12px 16px; margin-bottom: 16px; border-radius: 8px; background: #eaf3ed; color: #426c50; font-size: 13px; }
+.intake-tabs > .el-tabs__header { margin-bottom: 24px; }
+.intake-tabs > .el-tabs__header .el-tabs__item { height: 48px; }
+.intake-tabs > .el-tabs__header .el-tabs__nav-wrap::after { height: 1px; background: var(--workspace-border); }
+.intake-entry-layout { display: grid; grid-template-columns: minmax(0, 1fr); gap: 24px; align-items: start; }
+.intake-workspace .intake-card { padding: 0; min-width: 0; border-color: var(--workspace-border); border-radius: var(--workspace-radius); box-shadow: var(--workspace-shadow); }
+.intake-card-heading { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px; padding: 24px; border-bottom: 1px solid var(--workspace-border); }
+.intake-card-heading h2, .record-heading h2 { margin: 0; font-size: 17px; font-weight: 600; }
+.intake-card-heading p { margin: 9px 0 0; font-size: 12px; line-height: 1.7; color: var(--workspace-muted); }
+.intake-count { display: inline-block; margin-left: 8px; padding: 3px 9px; background: #eef5ef; color: #467455; border-radius: 5px; font-size: 12px; font-weight: 500; vertical-align: middle; }
+.intake-form-section { padding: 26px 28px 6px; }
+.intake-form-section + .intake-form-section { border-top: 1px solid #edf1ed; }
+.intake-form-section h3 { display: flex; align-items: center; gap: 10px; margin: 0 0 20px; font-size: 14px; }
+.intake-form-section h3 > span { font-size: 11px; color: #4d7659; background: #eef5ef; border-radius: 5px; padding: 5px 7px; }
+.intake-form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 24px; }
+.intake-workspace .el-form-item { min-width: 0; margin-bottom: 22px; }
+.intake-workspace .el-form-item__label { color: #4f655a; font-size: 13px; }
+.intake-workspace .el-input__wrapper, .intake-workspace .el-select__wrapper { min-height: 38px; }
+.intake-workspace .el-select { width: 100%; min-width: 0; }
+.intake-workspace .full-width { grid-column: 1 / -1; }
+.intake-workspace .intake-form-help { margin: 8px 0 14px; color: var(--workspace-muted); font-size: 12px; line-height: 1.8; width: 100%; }
+.intake-form-section > .intake-form-help { margin-top: -8px; }
+.intake-form-footer { padding: 20px 28px; border-top: 1px solid var(--workspace-border); background: #fafbf9; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px; }
+.intake-form-footer > span { color: var(--workspace-muted); font-size: 12px; line-height: 1.7; }
+.intake-workspace .form-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.intake-workspace .el-button + .el-button { margin-left: 0; }
+.intake-card .el-table { --el-table-header-bg-color: #f5f7f4; --el-table-header-text-color: #63796b; --el-table-border-color: #edf1ed; --el-table-row-hover-bg-color: #f5f9f5; color: #40584a; }
+.intake-card .el-table th .cell { font-weight: 500; }
+.intake-table-note { padding: 18px 24px; margin: 0; color: var(--workspace-muted); font-size: 12px; line-height: 1.8; }
+.intake-submission { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px; margin-top: 24px; padding: 22px 24px; background: #eaf3ed; border: 1px solid #d7e5db; border-radius: var(--workspace-radius); color: #42654f; }
+.intake-submission h3 { margin: 0 0 10px; font-size: 14px; }
+.intake-submission p, .intake-submission > span { margin: 0; font-size: 12px; line-height: 1.8; }
+.intake-toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; padding: 24px; border-bottom: 1px solid #edf1ed; }
+.intake-toolbar label { font-size: 13px; color: #4f655a; }
+.intake-toolbar .el-input { max-width: 360px; }
+.intake-workspace .detail-panel, .record-detail { padding: 24px; border-top: 1px solid #edf1ed; }
+.intake-workspace .detail-panel h3 { font-size: 16px; line-height: 1.7; overflow-wrap: anywhere; }
+.record-heading { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 24px; }
+.record-status { display: flex; flex-wrap: wrap; gap: 8px; }
+.record-fields { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 22px 24px; padding: 22px; margin: 0; background: #f5f7f4; border-radius: 8px; }
+.record-fields dt { font-size: 12px; color: var(--workspace-muted); margin-bottom: 8px; }
+.record-fields dd { margin: 0; font-size: 14px; line-height: 1.8; overflow-wrap: anywhere; }
+.record-section { margin-top: 28px; min-width: 0; }
+.record-section h3 { margin: 0 0 14px; padding-left: 10px; border-left: 3px solid #41765b; font-size: 14px; }
+.record-description { margin: 0; white-space: pre-wrap; line-height: 1.9; font-size: 14px; overflow-wrap: anywhere; }
+.record-empty, .record-original { background: #f5f7f4; border-radius: 8px; padding: 16px; margin: 0; font-size: 13px; line-height: 1.8; }
+.record-empty { color: var(--workspace-muted); }
+.record-original { white-space: pre-wrap; max-height: 320px; overflow: auto; overflow-wrap: anywhere; }
+.keyword-hits, .keyword-hit { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.keyword-hits { flex-direction: column; align-items: flex-start; }
+.keyword-hit .el-tag { max-width: 100%; height: auto; white-space: normal; overflow-wrap: anywhere; }
+.archive-picker .el-form-item__content { display: flex; flex-direction: column; align-items: stretch; gap: 12px; }
+.candidate-filter { display: flex; flex-wrap: wrap; gap: 10px; }
+.candidate-filter .el-input { flex: 1; min-width: 200px; }
+.intake-settings-body { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 40px; padding: 28px; align-items: start; }
+.settings-form { max-width: 480px; }
+.intake-settings-note { padding: 24px; background: #f5f7f4; border-radius: 8px; }
+.intake-settings-note h3 { font-size: 14px; margin-bottom: 14px; }
+.intake-settings-note p { font-size: 13px; color: var(--workspace-muted); line-height: 1.9; margin-bottom: 8px; }
+@media (min-width: 1450px) {
+  .intake-entry-layout { grid-template-columns: minmax(0, 1fr) 400px; }
+}
+@media (max-width: 1100px) {
+  .intake-workspace { padding: 28px 24px; }
+  .intake-process > div { padding: 18px; gap: 12px; }
+  .intake-process > div > span { display: none; }
+}
+@media (max-width: 760px) {
+  .intake-workspace { padding: 24px 16px; }
+  .intake-workspace .page-heading { flex-wrap: wrap; gap: 4px; }
+  .intake-workspace .page-heading h1 { font-size: 24px; }
+  .intake-process { gap: 8px; margin-bottom: 16px; }
+  .intake-process > div { padding: 14px 10px; }
+  .intake-process strong { font-size: 12px; }
+  .intake-process p { font-size: 11px; }
+  .intake-form-grid, .record-fields, .intake-settings-body { grid-template-columns: minmax(0, 1fr); }
+  .intake-card-heading, .intake-toolbar, .intake-workspace .detail-panel, .record-detail { padding: 20px 16px; }
+  .intake-form-section { padding: 22px 16px 4px; }
+  .intake-form-footer { padding: 18px 16px; }
+  .intake-form-footer .form-actions { width: 100%; }
+  .intake-form-footer .el-button { flex: 1; padding: 8px; }
+  .intake-toolbar .el-input { max-width: none; flex-basis: 100%; }
+  .record-fields { padding: 18px; gap: 18px; }
+  .intake-settings-body { padding: 20px 16px; gap: 24px; }
+  .intake-table-note { padding: 16px; }
+  .candidate-filter .el-input { flex-basis: 100%; min-width: 0; }
+}
