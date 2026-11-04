@@ -1,0 +1,56 @@
+.batch-access { display: grid; gap: 24px; min-width: 0; color: #344e40; }
+.access-summary { display: flex; align-items: center; justify-content: space-between; gap: 28px; padding: 28px; background: linear-gradient(110deg, #edf4ed, #fafcf8); border: 1px solid #dbe6dd; border-radius: 12px; }
+.access-summary h2 { margin: 0 0 12px; font-size: 24px; color: #254b38; }
+.batch-access p { font-size: 13px; line-height: 1.8; overflow-wrap: anywhere; }
+.access-summary p:last-child { margin: 0; color: #63796b; }
+.access-metrics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 28px; flex-shrink: 0; }
+.access-metrics span { color: #63796b; font-size: 12px; }
+.access-metrics strong { display: block; margin-top: 10px; color: #315e49; font-size: 28px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.access-steps { list-style: none; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; margin: 0; padding: 0; }
+.access-steps li { display: flex; align-items: center; gap: 14px; font-size: 14px; }
+.access-steps b { padding: 12px; border-radius: 10px; color: #47735a; background: #e8efe7; font-size: 13px; }
+.access-steps small { display: block; margin-top: 7px; color: #738477; font-size: 12px; line-height: 1.6; }
+.governance-workspace .batch-access .event-card { border-color: var(--workspace-border); border-radius: var(--workspace-radius); box-shadow: var(--workspace-shadow); min-width: 0; }
+.access-heading { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px; margin-bottom: 24px; }
+.access-heading > div { min-width: 0; }
+.governance-workspace .access-heading h2 { font-size: 17px; margin: 0 0 8px; }
+.access-heading p { margin: 0; color: #738477; }
+.access-count { padding: 3px 8px; border-radius: 5px; background: #edf4ed; color: #54765c; font-size: 12px; font-weight: 400; white-space: nowrap; }
+.access-template { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px; padding: 18px; margin-bottom: 20px; background: #f5f8f4; border-radius: 8px; }
+.access-template strong { font-size: 14px; }
+.access-template p { margin: 8px 0 0; color: #738477; }
+.access-template .template-links { display: flex; flex-wrap: wrap; gap: 16px; }
+.batch-access .upload-row { justify-content: space-between; padding: 20px; }
+.batch-access .upload-row > div { flex: 1 1 260px; min-width: 0; }
+.batch-access .upload-row label { display: block; margin-bottom: 14px; font-size: 14px; }
+.batch-access .upload-row input { width: 100%; }
+.access-note { color: #738477; font-size: 13px; }
+.batch-access .el-table { --el-table-header-bg-color: #f5f7f4; --el-table-header-text-color: #63796b; --el-table-border-color: #edf1ed; --el-table-row-hover-bg-color: #f5f9f5; color: #40584a; }
+.batch-access .el-table .cell { overflow-wrap: anywhere; }
+.batch-access .el-table__empty-text { padding: 20px; line-height: 1.8; }
+.access-form-section { padding-top: 20px; margin-top: 20px; border-top: 1px solid #edf1ed; }
+.access-form-section:first-child { padding-top: 0; border-top: 0; }
+.access-form-section h3 { margin: 0 0 12px; }
+.access-form-section > p { color: #738477; margin-bottom: 20px; }
+.access-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 16px; padding-top: 20px; border-top: 1px solid #edf1ed; }
+.access-actions > span { color: #738477; font-size: 13px; }
+.batch-access .el-input-number { width: 100%; }
+.access-token { margin-top: 24px; padding: 20px; border: 1px solid #dbe6dd; background: #f2f7f1; border-radius: 10px; }
+.access-token strong { font-size: 14px; }
+.access-token p { color: #63796b; }
+.access-token code { display: block; padding: 14px; background: #fff; margin-bottom: 16px; user-select: all; }
+.access-failure summary { cursor: pointer; color: #98604c; }
+.access-failure p { margin-bottom: 0; }
+@media (max-width: 1100px) {
+  .access-summary { flex-direction: column; align-items: flex-start; }
+  .access-metrics { width: 100%; }
+}
+@media (max-width: 760px) {
+  .batch-access { gap: 20px; }
+  .access-summary { padding: 20px; }
+  .access-metrics { gap: 12px; }
+  .access-metrics strong { font-size: 24px; }
+  .access-steps { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+  .batch-access .upload-row { padding: 16px; }
+  .batch-access .upload-row .el-button { width: 100%; }
+}

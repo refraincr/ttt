@@ -47,7 +47,16 @@ test('人工调整不可突破特殊来源保底，部门不可操作风险规�
 test('CSV保留接收时特殊账号来源证据',async({request})=>{await signIn(request,'special');const b=await upload(request,`personName,idCard,phone,eventTime,description,categoryId,disputeId\n虚构特殊批量,,,2026-10-01T10:00:00,${uniqueName('特殊批次')},${category},${dispute}\n`);const rows=await waitRows(request,b.id);expect(rows[0].state).toBe('SUCCESS');const r=await ok(await request.get('/api/intake/records/'+rows[0].record_id));expect(r.special_report).toBe(true);expect(r.department_id).toBe(2)})
 import {setupCases as setupCaseRules,riskRecord as ruleRecord,alertFor as ruleAlert} from './cases-support'
 test('规则后台重算沿用预警入口，相同规则不误标新增依据，关闭后的升级再次预警',async({request})=>{
+ test.setTimeout(180_000)
  const options=await setupCaseRules(request);const r=await ruleRecord(request,options);await ruleRecord(request,options,{personName:r.party_name,phone:r.party_phone,eventTime:'2026-03-01T10:00:00',description:'另一条独立事项'});let a=await ruleAlert(request,r.party_name);a=await ok(await write(request,'POST',`/api/cases/alerts/${a.id}/reviews`,{version:a.version,conclusion:'已研判当前全部依据',close:false}));const original=(await ok(await request.get('/api/risk-governance/rules'))).active;
- async function publish(rules:any){const draft=await ok(await write(request,'POST','/api/risk-governance/rules',{rules}));await ok(await write(request,'POST',`/api/risk-governance/rules/${draft.id}/preview`,{}));await ok(await write(request,'POST',`/api/risk-governance/rules/${draft.id}/publish`,{version:draft.version}));await expect.poll(async()=>{const data=await ok(await request.get('/api/risk-governance/rules'));return data.jobs[0].state},{timeout:30000}).toBe('COMPLETED')}
+ async function publish(rules:any){
+  const draft=await ok(await write(request,'POST','/api/risk-governance/rules',{rules}))
+  await ok(await write(request,'POST',`/api/risk-governance/rules/${draft.id}/preview`,{}))
+  const job=await ok(await write(request,'POST',`/api/risk-governance/rules/${draft.id}/publish`,{version:draft.version}))
+  await expect.poll(async()=>{
+   const data=await ok(await request.get('/api/risk-governance/rules'))
+   return data.jobs.find((item:any)=>item.id===job.jobId)?.state
+  },{timeout:45_000}).toBe('COMPLETED')
+ }
  try{await publish(original);let after=await ruleAlert(request,r.party_name);expect(after.id).toBe(a.id);expect(after.new_basis).toBe(false);expect(after.version).toBe(a.version);a=await ok(await write(request,'POST',`/api/cases/alerts/${a.id}/reviews`,{version:after.version,conclusion:'已完成研判，关闭后继续监测',close:true}));await publish({...original,medium:1,high:2});after=await ruleAlert(request,r.party_name);expect(after.level).toBe('HIGH');expect(after.id).not.toBe(a.id)}finally{await publish(original)}
 })

@@ -1,0 +1,125 @@
+import { test, expect, type Page } from '@playwright/test'
+import { signIn } from './support'
+
+const sources = [{ id: 1, name: '虚构可信来源' }, { id: 2, name: '虚构第二来源' }]
+const mappings = [{ id: 81, source_id: 1, name: '虚构映射', version: 2 }, { id: 82, source_id: 2, name: '其他来源映射', version: 1 }]
+async function open(page: Page, username = 'center', empty = false) {
+  await signIn(page.request, username)
+  await page.route('**/api/options/sources', route => route.fulfill({ json: sources }))
+  await page.route('**/api/batches/mappings', route => route.fulfill({ json: empty ? [] : mappings }))
+  await page.route('**/api/batches', route => route.fulfill({ json: empty ? [] : [{ id: 7100, filename: '虚构文件名称'.repeat(30) + '.xlsx', total: 6, pending: 2, succeeded: 1, failed: 2, duplicates: 1 }] }))
+  await page.route('**/api/batches/receipts', route => route.fulfill({ json: empty ? [] : [{ name: '虚构接入', external_id: 'EXT-001', record_id: null, error: '虚构失败原因。'.repeat(40), created_at: '2026-11-04T12:00:00' }] }))
+  await page.route('**/api/batches/credentials', route => route.fulfill({ json: [] }))
+  await page.goto('/')
+  if (page.viewportSize()!.width < 760) await page.getByRole('button', { name: '打开业务导航' }).click()
+  await page.getByRole('button', { name: '规则与批量接入', exact: true }).click()
+  await expect(page.getByRole('button', { name: '刷新进度', exact: true })).toBeEnabled()
+}
+
+for (const [width, height] of [[1440, 900], [1280, 800], [390, 844]]) {
+  test(`批量接入 ${width} 布局、映射切换及完整失败原因`, async ({ page }) => {
+    await page.setViewportSize({ width, height })
+    await open(page)
+    await expect(page.getByText('处理中', { exact: true })).toBeVisible()
+    await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+    await page.screenshot({ path: `../docs/screenshots/ui-refresh/08-import-${width}.png`, fullPage: true, animations: 'disabled' })
+    await page.getByRole('tab', { name: '来源映射', exact: true }).click()
+    await page.getByRole('combobox', { name: '映射可信数据来源', exact: true }).press('ArrowDown')
+    await page.getByRole('option', { name: '虚构可信来源', exact: true }).click()
+    await expect(page.getByRole('cell', { name: '虚构映射', exact: true })).toBeVisible()
+    await expect(page.getByRole('cell', { name: '其他来源映射', exact: true })).toHaveCount(0)
+    await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+    await page.screenshot({ path: `../docs/screenshots/ui-refresh/08-mapping-${width}.png`, fullPage: true, animations: 'disabled' })
+    await page.getByRole('tab', { name: '批量导入', exact: true }).click()
+    await page.getByRole('combobox', { name: '来源映射版本', exact: true }).press('ArrowDown')
+    await page.getByRole('option', { name: '虚构映射 · 版本 2', exact: true }).click()
+    await expect(page.getByRole('link', { name: '下载 Excel 模板' })).toHaveAttribute('href', '/api/batches/template?sourceId=1&format=xlsx&mappingId=81')
+    await page.getByRole('combobox', { name: '导入可信数据来源', exact: true }).press('ArrowDown')
+    await page.getByRole('option', { name: '虚构第二来源', exact: true }).click()
+    await expect(page.getByRole('link', { name: '下载 CSV 模板' })).toHaveAttribute('href', '/api/batches/template?sourceId=2&format=csv')
+    await page.getByRole('tab', { name: '外部接收结果', exact: true }).click()
+    await page.getByText('查看失败原因', { exact: true }).click()
+    await expect(page.getByText('虚构失败原因。'.repeat(40), { exact: true })).toBeVisible()
+    await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+    await page.screenshot({ path: `../docs/screenshots/ui-refresh/08-receipts-${width}.png`, fullPage: true, animations: 'disabled' })
+  })
+}
+
+test('映射校验、保存失败保留输入、加载禁用与新版本保存', async ({ page }) => {
+  await open(page, 'center', true)
+  await expect(page.getByText('暂无导入批次，提交文件后将在此显示')).toBeVisible()
+  await page.getByRole('button', { name: '提交批量导入', exact: true }).click()
+  await expect(page.getByText('请选择来源和文件', { exact: true })).toBeVisible()
+  await page.getByRole('tab', { name: '来源映射', exact: true }).click()
+  await page.getByRole('button', { name: '保存映射新版本', exact: true }).click()
+  await expect(page.getByText('请选择可信数据来源', { exact: true })).toBeVisible()
+  await page.getByRole('combobox', { name: '映射可信数据来源' }).press('ArrowDown')
+  await page.getByRole('option', { name: '虚构可信来源', exact: true }).click()
+  await page.getByRole('button', { name: '保存映射新版本', exact: true }).click()
+  await expect(page.getByText('请填写映射名称', { exact: true })).toBeVisible()
+  await page.getByRole('textbox', { name: '映射名称', exact: true }).fill('虚构新映射')
+  await page.getByRole('textbox', { name: '事件分类别名', exact: true }).fill('无等号')
+  await page.getByRole('button', { name: '保存映射新版本', exact: true }).click()
+  await expect(page.getByText('别名格式为 原值=标准分类编号，每行一条', { exact: true })).toBeVisible()
+  await page.getByRole('textbox', { name: '事件分类别名', exact: true }).fill('民生=1')
+  let fail = true
+  let release: () => void = () => {}
+  const gate = new Promise<void>(resolve => { release = resolve })
+  await page.route('**/api/batches/mappings', async route => {
+    if (route.request().method() === 'POST') {
+      expect(route.request().postDataJSON()).toMatchObject({ sourceId: 1, name: '虚构新映射', categories: { 民生: '1' } })
+      await gate
+      await route.fulfill(fail ? { status: 503, json: { message: '映射保存暂不可用' } } : { json: { id: 83 } })
+    } else await route.fulfill({ json: [{ id: 83, source_id: 1, name: '虚构新映射', version: 1 }] })
+  })
+  await page.getByRole('button', { name: '保存映射新版本', exact: true }).click()
+  await expect(page.getByRole('textbox', { name: '映射名称', exact: true })).toBeDisabled()
+  release()
+  await expect(page.getByText('映射保存暂不可用', { exact: true })).toBeVisible()
+  await expect(page.getByRole('textbox', { name: '映射名称', exact: true })).toHaveValue('虚构新映射')
+  fail = false
+  await page.getByRole('button', { name: '保存映射新版本', exact: true }).click()
+  await expect(page.getByText('映射版本已保存', { exact: true })).toBeVisible()
+  await expect(page.getByRole('cell', { name: '虚构新映射', exact: true })).toBeVisible()
+})
+
+test('管理员凭据校验、一次展示、隐藏与停用', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  await open(page, 'admin')
+  await expect(page.getByRole('tab', { name: '来源映射', exact: true })).toHaveCount(0)
+  await page.getByRole('tab', { name: '外部接入凭据', exact: true }).click()
+  await page.getByRole('button', { name: '创建凭据', exact: true }).click()
+  await expect(page.getByText('请填写凭据名称、有效部门编号并选择绑定来源', { exact: true })).toBeVisible()
+  await page.getByRole('textbox', { name: '凭据名称', exact: true }).fill('虚构接入')
+  await page.getByRole('spinbutton', { name: '绑定部门编号', exact: true }).fill('2')
+  await page.getByRole('combobox', { name: '绑定来源', exact: true }).press('ArrowDown')
+  await page.getByRole('option', { name: '虚构可信来源', exact: true }).click()
+  let enabled = true
+  await page.route('**/api/batches/credentials', route => route.fulfill({ json: route.request().method() === 'POST' ? { id: 91, token: 'FICTIONAL-TEST-TOKEN' } : [{ id: 91, name: '虚构接入', department_id: 2, source_id: 1, enabled }] }))
+  await page.route('**/api/batches/credentials/91', route => { enabled = false; return route.fulfill({ json: {} }) })
+  await page.getByRole('button', { name: '创建凭据', exact: true }).click()
+  await expect(page.getByText('FICTIONAL-TEST-TOKEN', { exact: true })).toBeVisible()
+  await page.route('**/api/batches/credentials', route => route.request().method() === 'POST' ? route.fulfill({ status: 503, json: { message: '创建暂不可用' } }) : route.fallback())
+  await page.getByRole('button', { name: '创建凭据', exact: true }).click()
+  await expect(page.getByText('创建暂不可用', { exact: true })).toBeVisible()
+  await expect(page.getByText('FICTIONAL-TEST-TOKEN', { exact: true })).toBeVisible()
+  await page.getByRole('button', { name: '隐藏令牌', exact: true }).click()
+  await expect(page.getByText('FICTIONAL-TEST-TOKEN', { exact: true })).toHaveCount(0)
+  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+  await page.screenshot({ path: '../docs/screenshots/ui-refresh/08-credentials-390.png', fullPage: true, animations: 'disabled' })
+  await page.getByRole('button', { name: '停用凭据', exact: true }).click()
+  await expect(page.getByText('已停用', { exact: true })).toBeVisible()
+  await expect(page.getByRole('button', { name: '停用凭据', exact: true })).toBeDisabled()
+})
+
+test('部门仅可导入，读取失败可刷新重试', async ({ page }) => {
+  await open(page, 'civil', true)
+  await expect(page.getByRole('tab')).toHaveCount(1)
+  await page.route('**/api/batches', route => route.fulfill({ status: 503, json: { message: '批次暂不可用' } }))
+  await page.getByRole('button', { name: '刷新进度', exact: true }).click()
+  await expect(page.getByText('批次暂不可用', { exact: true })).toBeVisible()
+  await expect(page.getByText('批次读取失败，请刷新重试', { exact: true })).toBeVisible()
+  await page.route('**/api/batches', route => route.fulfill({ json: [] }))
+  await page.getByRole('button', { name: '刷新进度', exact: true }).click()
+  await expect(page.getByText('暂无导入批次，提交文件后将在此显示')).toBeVisible()
+})
